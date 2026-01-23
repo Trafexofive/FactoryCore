@@ -1,0 +1,10 @@
+{
+  "type": "factorycore:engineer_plane",
+  "generator": {
+    "type": "factorycore:engineer_plane",
+    "biome_source": {
+      "type": "minecraft:fixed",
+      "biome": "minecraft:the_void"
+    }
+  }
+}

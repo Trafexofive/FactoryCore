@@ -1,0 +1,34 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+issueTrackerURL="https://github.com/example/issueTracker"
+
+[[mods]]
+modId="factorycore"
+version="1.0.0"
+displayName="FactoryCore"
+displayURL="https://github.com/example/repo"
+logoFile="logo.png"
+authors="YourName"
+description="Heavy industry and multiblocks."
+
+[[dependencies.factorycore]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.65-beta,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.factorycore]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.factorycore]]
+modId="ghostlib"
+type="required"
+versionRange="[1.0.0,)"
+ordering="AFTER"
+side="BOTH"
