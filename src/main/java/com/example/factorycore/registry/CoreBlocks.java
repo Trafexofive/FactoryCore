@@ -1,9 +1,6 @@
 package com.example.factorycore.registry;
 
 import com.example.factorycore.FactoryCore;
-import com.example.factorycore.block.AutoAssemblerControllerBlock;
-import com.example.factorycore.block.ElectricFurnaceControllerBlock;
-import com.example.factorycore.block.MultiblockMemberBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -15,16 +12,20 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public class CoreBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(FactoryCore.MODID);
 
-    // Casings
     public static final DeferredBlock<Block> MACHINE_CASING = BLOCKS.register("machine_casing",
-            () -> new MultiblockMemberBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).sound(SoundType.METAL)));
+            () -> new Block(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f).sound(SoundType.METAL)));
 
-    // Controllers
     public static final DeferredBlock<Block> ELECTRIC_FURNACE_CONTROLLER = BLOCKS.register("electric_furnace_controller",
-            () -> new ElectricFurnaceControllerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).sound(SoundType.METAL)));
+            () -> new com.example.factorycore.block.ElectricFurnaceControllerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f).sound(SoundType.METAL)));
 
     public static final DeferredBlock<Block> AUTO_ASSEMBLER_CONTROLLER = BLOCKS.register("auto_assembler_controller",
-            () -> new AutoAssemblerControllerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).sound(SoundType.METAL)));
+            () -> new com.example.factorycore.block.AutoAssemblerControllerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f).sound(SoundType.METAL)));
+
+    public static final DeferredBlock<Block> ELECTRICAL_FLOOR = BLOCKS.register("electrical_floor",
+            () -> new com.example.factorycore.block.ElectricalFloorBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL)));
+
+    public static final DeferredBlock<Block> CREATIVE_ENERGY_SOURCE = BLOCKS.register("creative_energy_source",
+            () -> new com.example.factorycore.block.CreativeEnergySourceBlock(BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE).strength(-1.0f, 3600000.0f).sound(SoundType.METAL)));
 
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);

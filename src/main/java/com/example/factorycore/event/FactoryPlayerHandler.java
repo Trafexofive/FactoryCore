@@ -31,6 +31,8 @@ public class FactoryPlayerHandler {
             
             // 1. Give Materials
             player.getInventory().add(new ItemStack(CoreItems.MACHINE_CASING.get(), 64));
+            player.getInventory().add(new ItemStack(CoreItems.ELECTRICAL_FLOOR.get(), 64));
+            player.getInventory().add(new ItemStack(CoreItems.CREATIVE_ENERGY_SOURCE.get(), 1));
             player.getInventory().add(new ItemStack(CoreItems.ELECTRIC_FURNACE_CONTROLLER.get(), 1));
             player.getInventory().add(new ItemStack(CoreItems.AUTO_ASSEMBLER_CONTROLLER.get(), 1));
             

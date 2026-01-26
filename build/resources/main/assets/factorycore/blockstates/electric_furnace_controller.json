@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "factorycore:block/electric_furnace_controller" }
+  }
+}

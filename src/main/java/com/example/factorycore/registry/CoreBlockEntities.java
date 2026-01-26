@@ -3,6 +3,8 @@ package com.example.factorycore.registry;
 import com.example.factorycore.FactoryCore;
 import com.example.factorycore.block.entity.AutoAssemblerBlockEntity;
 import com.example.factorycore.block.entity.ElectricFurnaceBlockEntity;
+import com.example.factorycore.block.entity.ElectricalFloorBlockEntity;
+import com.example.factorycore.block.entity.CreativeEnergySourceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -16,6 +18,12 @@ public class CoreBlockEntities {
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<AutoAssemblerBlockEntity>> AUTO_ASSEMBLER = BLOCK_ENTITIES.register("auto_assembler",
             () -> BlockEntityType.Builder.of(AutoAssemblerBlockEntity::new, CoreBlocks.AUTO_ASSEMBLER_CONTROLLER.get()).build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ElectricalFloorBlockEntity>> ELECTRICAL_FLOOR = BLOCK_ENTITIES.register("electrical_floor",
+            () -> BlockEntityType.Builder.of(ElectricalFloorBlockEntity::new, CoreBlocks.ELECTRICAL_FLOOR.get()).build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CreativeEnergySourceBlockEntity>> CREATIVE_ENERGY_SOURCE = BLOCK_ENTITIES.register("creative_energy_source",
+            () -> BlockEntityType.Builder.of(CreativeEnergySourceBlockEntity::new, CoreBlocks.CREATIVE_ENERGY_SOURCE.get()).build(null));
 
     public static void register(IEventBus eventBus) {
         BLOCK_ENTITIES.register(eventBus);

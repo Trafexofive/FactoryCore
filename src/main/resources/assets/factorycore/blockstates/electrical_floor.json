@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "factorycore:block/electrical_floor" }
+  }
+}
