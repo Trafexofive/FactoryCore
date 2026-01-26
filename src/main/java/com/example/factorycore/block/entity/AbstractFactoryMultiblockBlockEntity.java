@@ -78,7 +78,9 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
 
     protected void onFormationChanged(boolean formed) {
         setChanged();
-        // Update blockstate for visual feedback?
+        if (formed && level != null) {
+            level.playSound(null, worldPosition, net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP, net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
+        }
     }
 
     protected abstract void serverTick();

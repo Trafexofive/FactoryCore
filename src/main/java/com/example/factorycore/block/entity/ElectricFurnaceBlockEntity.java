@@ -12,13 +12,54 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 
 import java.util.Optional;
 
-public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEntity {
+import com.example.factorycore.menu.ElectricFurnaceMenu;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
+
+public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEntity implements MenuProvider {
     private static final int ENERGY_PER_TICK = 100;
     private int progress = 0;
     private int maxProgress = 100;
+    
+    // Sync Energy to Client Menu
+    protected final ContainerData data = new ContainerData() {
+        @Override
+        public int get(int index) {
+            IEnergyStorage e = getFloorEnergy();
+            return switch (index) {
+                case 0 -> e != null ? e.getEnergyStored() : 0;
+                case 1 -> progress;
+                default -> 0;
+            };
+        }
+
+        @Override
+        public void set(int index, int value) {
+            if (index == 1) progress = value;
+        }
+
+        @Override
+        public int getCount() {
+            return 2;
+        }
+    };
 
     public ElectricFurnaceBlockEntity(BlockPos pos, BlockState state) {
         super(CoreBlockEntities.ELECTRIC_FURNACE.get(), pos, state);
+    }
+
+    @Override
+    public Component getDisplayName() {
+        return Component.literal("Electric Furnace");
+    }
+
+    @Override
+    public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
+        return new ElectricFurnaceMenu(containerId, inventory, this, data);
     }
 
     @Override

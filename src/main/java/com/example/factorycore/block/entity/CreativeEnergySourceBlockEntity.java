@@ -30,4 +30,16 @@ public class CreativeEnergySourceBlockEntity extends BlockEntity {
             (be, side) -> be.energy
         );
     }
+
+    public static void tick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, CreativeEnergySourceBlockEntity be) {
+        if (level.isClientSide) return;
+        
+        // Push to all neighbors
+        for (Direction dir : Direction.values()) {
+            IEnergyStorage target = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos.relative(dir), dir.getOpposite());
+            if (target != null && target.canReceive()) {
+                target.receiveEnergy(1000000, false);
+            }
+        }
+    }
 }

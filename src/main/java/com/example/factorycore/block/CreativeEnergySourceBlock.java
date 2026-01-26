@@ -30,4 +30,10 @@ public class CreativeEnergySourceBlock extends BaseEntityBlock {
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new CreativeEnergySourceBlockEntity(pos, state);
     }
+
+    @Nullable
+    @Override
+    public <T extends BlockEntity> net.minecraft.world.level.block.entity.BlockEntityTicker<T> getTicker(net.minecraft.world.level.Level level, BlockState state, net.minecraft.world.level.block.entity.BlockEntityType<T> type) {
+        return createTickerHelper(type, com.example.factorycore.registry.CoreBlockEntities.CREATIVE_ENERGY_SOURCE.get(), CreativeEnergySourceBlockEntity::tick);
+    }
 }

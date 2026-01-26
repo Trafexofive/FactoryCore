@@ -8,6 +8,8 @@ import com.example.factorycore.registry.CoreItems;
 
 import com.example.factorycore.registry.CoreChunkGenerators;
 
+import com.example.factorycore.registry.CoreMenus;
+
 import net.neoforged.bus.api.IEventBus;
 
 import net.neoforged.fml.common.Mod;
@@ -31,6 +33,8 @@ public class FactoryCore {
         CoreBlockEntities.register(modEventBus);
 
         CoreChunkGenerators.register(modEventBus);
+
+        CoreMenus.register(modEventBus);
 
     }
 

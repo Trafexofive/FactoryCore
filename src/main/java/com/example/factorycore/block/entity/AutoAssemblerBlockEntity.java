@@ -8,13 +8,43 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 
-public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEntity {
+import com.example.factorycore.menu.AutoAssemblerMenu;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
+
+public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEntity implements MenuProvider {
     private static final int ENERGY_PER_TICK = 500;
     private int progress = 0;
     private int maxProgress = 200;
 
+    protected final ContainerData data = new ContainerData() {
+        @Override
+        public int get(int index) {
+            IEnergyStorage e = getFloorEnergy();
+            return switch (index) {
+                case 0 -> e != null ? e.getEnergyStored() : 0;
+                case 1 -> progress;
+                default -> 0;
+            };
+        }
+        @Override public void set(int index, int value) { if (index == 1) progress = value; }
+        @Override public int getCount() { return 2; }
+    };
+
     public AutoAssemblerBlockEntity(BlockPos pos, BlockState state) {
         super(CoreBlockEntities.AUTO_ASSEMBLER.get(), pos, state);
+    }
+
+    @Override
+    public Component getDisplayName() { return Component.literal("Auto Assembler"); }
+
+    @Override
+    public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
+        return new AutoAssemblerMenu(containerId, inventory, this, data);
     }
 
     @Override

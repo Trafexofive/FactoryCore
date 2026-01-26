@@ -38,7 +38,22 @@ public class AutoAssemblerControllerBlock extends BaseEntityBlock {
 
     @Nullable
     @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(net.minecraft.world.level.Level level, BlockState state, BlockEntityType<T> type) {
         return createTickerHelper(type, CoreBlockEntities.AUTO_ASSEMBLER.get(), AbstractFactoryMultiblockBlockEntity::tick);
+    }
+
+    @Override
+    protected net.minecraft.world.InteractionResult useWithoutItem(BlockState state, net.minecraft.world.level.Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.phys.BlockHitResult hitResult) {
+        if (!level.isClientSide) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof AutoAssemblerBlockEntity assembler) {
+                if (assembler.isFormed()) {
+                    player.openMenu(assembler, pos);
+                } else {
+                    player.displayClientMessage(net.minecraft.network.chat.Component.literal("Structure incomplete!").withStyle(net.minecraft.ChatFormatting.RED), true);
+                }
+            }
+        }
+        return net.minecraft.world.InteractionResult.SUCCESS;
     }
 }
