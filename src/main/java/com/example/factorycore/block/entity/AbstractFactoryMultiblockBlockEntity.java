@@ -43,6 +43,11 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
         return isFormed;
     }
 
+    /**
+     * Ticking Logic:
+     * 1. Check Structure periodicially (every 2 seconds/40 ticks) to save perf.
+     * 2. If Formed -> Run serverTick() (Business Logic).
+     */
     public static void tick(Level level, BlockPos pos, BlockState state, AbstractFactoryMultiblockBlockEntity be) {
         if (level.isClientSide) return;
 
@@ -60,6 +65,10 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
         }
     }
 
+    /**
+     * Validates the multiblock structure against the defined pattern.
+     * @return true if the structure is complete and valid.
+     */
     protected boolean checkStructure() {
         if (level == null) return false;
         // The origin for the pattern matching is controllerPos - offset

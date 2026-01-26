@@ -80,10 +80,14 @@ public class FactoryNetworkManager extends SavedData {
 
     /**
      * Called when a floor block is placed.
-     * Checks neighbors.
-     * 0 Neighbors -> New Network.
-     * 1 Neighbor -> Join Network.
-     * >1 Neighbors -> Merge Networks if different.
+     * Core Business Logic for Network Formation:
+     * 1. Check all 6 adjacent blocks for existing networks.
+     * 2. If no neighbors have a network, create a NEW network ID.
+     * 3. If neighbors belong to the SAME network, just add this block to it.
+     * 4. If neighbors belong to DIFFERENT networks, we must MERGE them.
+     *    - The larger network (or arbitrarily first found) absorbs the smaller ones.
+     *    - Energy buffers are combined (up to capacity).
+     *    - Old IDs are invalidated and redirected to the new master ID.
      */
     public void addNode(BlockPos pos) {
         if (nodeToNetworkId.containsKey(pos)) return; // Already exists
@@ -103,14 +107,14 @@ public class FactoryNetworkManager extends SavedData {
                     foundNet.addNode(pos);
                     nodeToNetworkId.put(pos, foundNet.getId());
                 } else if (foundNet.getId() != neighborNet.getId()) {
-                    // Merge needed
+                    // Critical: Two different networks touched. Merge required.
                     mergeNetworks(foundNet, neighborNet);
                 }
             }
         }
 
         if (foundNet == null) {
-            // Create new
+            // Isolated block -> Create new network root
             ElectricalNetwork newNet = new ElectricalNetwork(nextId++);
             networks.put(newNet.getId(), newNet);
             newNet.addNode(pos);
@@ -126,16 +130,27 @@ public class FactoryNetworkManager extends SavedData {
             net.removeNode(pos);
             nodeToNetworkId.remove(pos);
             
+            // Garbage Collection: If network is empty, delete it to free ID/memory
             if (net.getMembers().isEmpty()) {
                 networks.remove(net.getId());
             }
             
-            // TODO: Split detection logic would go here.
-            // For now, we assume the graph stays connected or we accept "magic wireless" behavior within an ID.
+            // NOTE: We do NOT currently handle network splitting (graph partition).
+            // If a floor line is cut in the middle, both halves remain on the same Network ID
+            // effectively creating a "wireless" bridge between the disconnected parts.
+            // This is a trade-off for performance (O(1) removal vs O(N) graph traversal).
             setDirty();
         }
     }
 
+    /**
+     * Merges 'victim' network into 'master' network.
+     * Logic:
+     * 1. Transfer all member blocks from victim to master.
+     * 2. Transfer stored energy.
+     * 3. Update lookup table so victim's blocks point to master ID.
+     * 4. Delete victim network.
+     */
     private void mergeNetworks(ElectricalNetwork master, ElectricalNetwork victim) {
         if (master == victim) return;
         

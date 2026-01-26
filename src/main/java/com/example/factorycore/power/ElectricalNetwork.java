@@ -13,6 +13,9 @@ import java.util.Set;
 public class ElectricalNetwork {
     private final int id;
     private final Set<BlockPos> members = new HashSet<>();
+    
+    // The shared energy buffer for the entire island.
+    // All connected machines pull from this single object.
     private final EnergyStorage energyBuffer;
     private boolean dirty = false;
 
@@ -23,6 +26,7 @@ public class ElectricalNetwork {
             @Override
             public int receiveEnergy(int maxReceive, boolean simulate) {
                 int r = super.receiveEnergy(maxReceive, simulate);
+                // Mark dirty only if energy actually changed
                 if (r > 0 && !simulate) dirty = true;
                 return r;
             }

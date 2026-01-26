@@ -34,6 +34,11 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
         return new ElectricalFloorBlockEntity(pos, state);
     }
 
+    /**
+     * Business Logic: Registration
+     * When placed, this block MUST notify the global NetworkManager to join or create an energy island.
+     * This happens Server-Side only.
+     */
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
         if (!level.isClientSide && !state.is(oldState.getBlock())) {
@@ -42,6 +47,11 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
         super.onPlace(state, level, pos, oldState, isMoving);
     }
 
+    /**
+     * Business Logic: Deregistration
+     * When broken, this block tells the manager to remove it from the graph.
+     * This might trigger network deletion if it was the last node.
+     */
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide) {

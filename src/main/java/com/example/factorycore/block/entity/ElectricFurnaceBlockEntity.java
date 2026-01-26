@@ -48,11 +48,16 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
         return new BlockPos(1, 1, 0);
     }
 
+    /**
+     * Specific Machine Logic:
+     * 1. Pull power from Floor (Block below).
+     * 2. If power sufficient -> Process item.
+     */
     @Override
     protected void serverTick() {
         IEnergyStorage energy = getFloorEnergy();
         if (energy == null || energy.getEnergyStored() < ENERGY_PER_TICK) {
-            progress = 0;
+            progress = 0; // Reset progress if power lost (penalty)
             return;
         }
 
