@@ -24,7 +24,7 @@ public class FactoryPlayerHandler {
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         Player player = event.getEntity();
-        String tag = "factorycore_received_v1";
+        String tag = "factorycore_received_v2"; // Increment tag to re-give corrected blueprints
         
         if (!player.getPersistentData().contains(tag)) {
             player.getPersistentData().putBoolean(tag, true);
@@ -40,7 +40,7 @@ public class FactoryPlayerHandler {
             player.getInventory().add(createBlueprint("Electric Furnace", createFurnacePattern()));
             player.getInventory().add(createBlueprint("Auto Assembler", createAssemblerPattern()));
             
-            player.displayClientMessage(net.minecraft.network.chat.Component.literal("FactoryCore Blueprints Received").withStyle(net.minecraft.ChatFormatting.GREEN), false);
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("FactoryCore Blueprints Received (V2)").withStyle(net.minecraft.ChatFormatting.GREEN), false);
         }
     }
 
@@ -56,17 +56,24 @@ public class FactoryPlayerHandler {
         ListTag patternList = new ListTag();
         
         // 3x3x3 Hollow Cube
-        for (int x = 0; x < 3; x++) {
-            for (int y = 0; y < 3; y++) {
-                for (int z = 0; z < 3; z++) {
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = 0; z <= 2; z++) {
                     // Hollow check: Must be on boundary
-                    boolean isEdge = (x==0 || x==2 || y==0 || y==2 || z==0 || z==2);
-                    if (!isEdge) continue;
+                    boolean isEdge = (x == -1 || x == 1 || y == -1 || y == 1 || z == 0 || z == 2);
+                    if (!isEdge) {
+                        // Enforce center is AIR
+                        CompoundTag blockTag = new CompoundTag();
+                        blockTag.put("Rel", NbtUtils.writeBlockPos(new BlockPos(x, y, z)));
+                        blockTag.put("State", NbtUtils.writeBlockState(Blocks.AIR.defaultBlockState()));
+                        patternList.add(blockTag);
+                        continue;
+                    }
 
                     BlockState state = CoreBlocks.MACHINE_CASING.get().defaultBlockState();
                     
-                    // Controller at front center (1, 1, 0)
-                    if (x == 1 && y == 1 && z == 0) {
+                    // Controller at front center (0, 0, 0)
+                    if (x == 0 && y == 0 && z == 0) {
                         state = CoreBlocks.ELECTRIC_FURNACE_CONTROLLER.get().defaultBlockState();
                     }
 
@@ -88,14 +95,20 @@ public class FactoryPlayerHandler {
         CompoundTag tag = new CompoundTag();
         ListTag patternList = new ListTag();
         
-        for (int x = 0; x < 3; x++) {
-            for (int y = 0; y < 3; y++) {
-                for (int z = 0; z < 3; z++) {
-                    boolean isEdge = (x==0 || x==2 || y==0 || y==2 || z==0 || z==2);
-                    if (!isEdge) continue;
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = 0; z <= 2; z++) {
+                    boolean isEdge = (x == -1 || x == 1 || y == -1 || y == 1 || z == 0 || z == 2);
+                    if (!isEdge) {
+                        CompoundTag blockTag = new CompoundTag();
+                        blockTag.put("Rel", NbtUtils.writeBlockPos(new BlockPos(x, y, z)));
+                        blockTag.put("State", NbtUtils.writeBlockState(Blocks.AIR.defaultBlockState()));
+                        patternList.add(blockTag);
+                        continue;
+                    }
 
                     BlockState state = CoreBlocks.MACHINE_CASING.get().defaultBlockState();
-                    if (x == 1 && y == 1 && z == 0) {
+                    if (x == 0 && y == 0 && z == 0) {
                         state = CoreBlocks.AUTO_ASSEMBLER_CONTROLLER.get().defaultBlockState();
                     }
 

@@ -20,9 +20,11 @@ public class ElectricFurnaceScreen extends AbstractContainerScreen<ElectricFurna
         int y = (height - imageHeight) / 2;
         graphics.blit(TEXTURE, x, y, 0, 0, imageWidth, imageHeight);
         
-        // Progress bar (Mocking vanilla burn/smelt arrow positions)
-        // Vanilla arrow: 79, 34. size 24x17
-        // I won't implement precise pixel math for prototype, just the background.
+        // Smelt progress arrow
+        // 79, 34 is the arrow pos in furnace.png
+        // 176, 14 is the full arrow texture offset in furnace.png
+        int l = this.menu.getProgressScale();
+        graphics.blit(TEXTURE, x + 79, y + 34, 176, 14, l + 1, 16);
     }
 
     @Override

@@ -27,14 +27,29 @@ public class MultiblockPattern {
         pattern.put(new BlockPos(x, y, z), predicate);
     }
 
-    public boolean matches(Level level, BlockPos origin) {
+    public boolean matches(Level level, BlockPos origin, net.minecraft.core.Direction facing) {
         for (Map.Entry<BlockPos, Predicate<BlockState>> entry : pattern.entrySet()) {
-            BlockPos target = origin.offset(entry.getKey());
+            BlockPos rel = entry.getKey();
+            
+            // Rotate relative position based on facing
+            // Assuming default pattern is facing NORTH (Z-)
+            BlockPos rotatedRel = rotate(rel, facing);
+            BlockPos target = origin.offset(rotatedRel);
+            
             if (!entry.getValue().test(level.getBlockState(target))) {
                 return false;
             }
         }
         return true;
+    }
+
+    private BlockPos rotate(BlockPos pos, net.minecraft.core.Direction facing) {
+        return switch (facing) {
+            case SOUTH -> new BlockPos(-pos.getX(), pos.getY(), -pos.getZ());
+            case WEST -> new BlockPos(pos.getZ(), pos.getY(), -pos.getX());
+            case EAST -> new BlockPos(-pos.getZ(), pos.getY(), pos.getX());
+            default -> pos; // NORTH is base
+        };
     }
     
     public Map<BlockPos, Predicate<BlockState>> getPattern() {

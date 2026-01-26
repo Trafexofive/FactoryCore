@@ -30,10 +30,6 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
     }
 
     public abstract MultiblockPattern getPattern();
-    
-    // Origin is where the controller is relative to the pattern
-    // Usually (1, 1, 0) for a 3x3x3 front-center controller
-    public abstract BlockPos getPatternOffset();
 
     public ItemStackHandler getInventory() {
         return inventory;
@@ -51,17 +47,21 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
     public static void tick(Level level, BlockPos pos, BlockState state, AbstractFactoryMultiblockBlockEntity be) {
         if (level.isClientSide) return;
 
-        if (be.checkTimer++ >= 40) {
+        if (be.checkTimer++ >= 20) {
             be.checkTimer = 0;
-            boolean wasFormed = be.isFormed;
-            be.isFormed = be.checkStructure();
-            if (wasFormed != be.isFormed) {
-                be.onFormationChanged(be.isFormed);
-            }
+            be.recheckStructure();
         }
 
         if (be.isFormed) {
             be.serverTick();
+        }
+    }
+
+    public void recheckStructure() {
+        boolean wasFormed = this.isFormed;
+        this.isFormed = this.checkStructure();
+        if (wasFormed != this.isFormed) {
+            this.onFormationChanged(this.isFormed);
         }
     }
 
@@ -71,9 +71,15 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
      */
     protected boolean checkStructure() {
         if (level == null) return false;
-        // The origin for the pattern matching is controllerPos - offset
-        BlockPos origin = worldPosition.subtract(getPatternOffset());
-        return getPattern().matches(level, origin);
+        
+        BlockState state = getBlockState();
+        net.minecraft.core.Direction facing = net.minecraft.core.Direction.NORTH;
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            facing = state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+        }
+
+        // The origin for the pattern matching is the controller itself.
+        return getPattern().matches(level, worldPosition, facing);
     }
 
     protected void onFormationChanged(boolean formed) {

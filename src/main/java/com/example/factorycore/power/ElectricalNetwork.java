@@ -94,7 +94,9 @@ public class ElectricalNetwork {
         
         ListTag memberList = new ListTag();
         for (BlockPos pos : members) {
-            memberList.add(NbtUtils.writeBlockPos(pos));
+            CompoundTag memberTag = new CompoundTag();
+            memberTag.put("P", NbtUtils.writeBlockPos(pos));
+            memberList.add(memberTag);
         }
         tag.put("Members", memberList);
         return tag;
@@ -102,15 +104,13 @@ public class ElectricalNetwork {
 
     public static ElectricalNetwork load(CompoundTag tag) {
         ElectricalNetwork net = new ElectricalNetwork(tag.getInt("Id"));
-        // Direct set energy (bypass restrictions for loading)
+        // Direct set energy
         int energy = tag.getInt("Energy");
         net.energyBuffer.receiveEnergy(energy, false); 
         
         ListTag memberList = tag.getList("Members", 10);
         for (int i = 0; i < memberList.size(); i++) {
-            NbtUtils.readBlockPos(memberList.getCompound(i), "Rel").ifPresent(net.members::add); // Handle legacy Rel? NbtUtils uses standard format
-            // NbtUtils.readBlockPos expects simple compound
-            net.members.add(NbtUtils.readBlockPos(memberList.getCompound(i), "P").orElse(BlockPos.ZERO));
+            NbtUtils.readBlockPos(memberList.getCompound(i), "P").ifPresent(net.members::add);
         }
         return net;
     }

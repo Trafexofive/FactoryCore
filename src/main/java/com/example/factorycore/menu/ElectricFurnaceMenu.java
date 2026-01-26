@@ -51,14 +51,47 @@ public class ElectricFurnaceMenu extends AbstractContainerMenu {
         this.addDataSlots(data);
     }
 
+    @Override
+    public ItemStack quickMoveStack(Player player, int index) {
+        ItemStack itemstack = ItemStack.EMPTY;
+        Slot slot = this.slots.get(index);
+        if (slot != null && slot.hasItem()) {
+            ItemStack itemstack1 = slot.getItem();
+            itemstack = itemstack1.copy();
+            if (index < 2) { // Machine Slots
+                if (!this.moveItemStackTo(itemstack1, 2, 38, true)) {
+                    return ItemStack.EMPTY;
+                }
+            } else { // Player Inventory
+                if (!this.moveItemStackTo(itemstack1, 0, 1, false)) { // Try Input Slot
+                    return ItemStack.EMPTY;
+                }
+            }
+
+            if (itemstack1.isEmpty()) {
+                slot.setByPlayer(ItemStack.EMPTY);
+            } else {
+                slot.setChanged();
+            }
+
+            if (itemstack1.getCount() == itemstack.getCount()) {
+                return ItemStack.EMPTY;
+            }
+
+            slot.onTake(player, itemstack1);
+        }
+
+        return itemstack;
+    }
+
     public int getEnergy() {
         return data.get(0);
     }
 
-    @Override
-    public ItemStack quickMoveStack(Player player, int index) {
-        // Standard shift-click logic (omitted for brevity, can add if requested)
-        return ItemStack.EMPTY;
+    public int getProgressScale() {
+        int progress = data.get(1);
+        int maxProgress = 100; // Hardcoded match with BE for now
+        return progress != 0 ? progress * 24 / maxProgress : 0;
     }
 
     @Override

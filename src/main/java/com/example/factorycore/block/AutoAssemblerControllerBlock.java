@@ -13,11 +13,27 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.item.context.BlockPlaceContext;
+
 public class AutoAssemblerControllerBlock extends BaseEntityBlock {
     public static final com.mojang.serialization.MapCodec<AutoAssemblerControllerBlock> CODEC = simpleCodec(AutoAssemblerControllerBlock::new);
 
     public AutoAssemblerControllerBlock(Properties properties) {
         super(properties);
+        this.registerDefaultState(this.stateDefinition.any().setValue(BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.NORTH));
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+        builder.add(BlockStateProperties.HORIZONTAL_FACING);
+    }
+
+    @Nullable
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return this.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
     }
 
     @Override
@@ -47,6 +63,7 @@ public class AutoAssemblerControllerBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof AutoAssemblerBlockEntity assembler) {
+                assembler.recheckStructure();
                 if (assembler.isFormed()) {
                     player.openMenu(assembler, pos);
                 } else {

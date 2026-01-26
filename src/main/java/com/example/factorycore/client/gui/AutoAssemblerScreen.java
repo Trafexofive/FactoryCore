@@ -19,6 +19,9 @@ public class AutoAssemblerScreen extends AbstractContainerScreen<AutoAssemblerMe
         int x = (width - imageWidth) / 2;
         int y = (height - imageHeight) / 2;
         graphics.blit(TEXTURE, x, y, 0, 0, imageWidth, imageHeight);
+
+        int l = this.menu.getProgressScale();
+        graphics.blit(TEXTURE, x + 79, y + 34, 176, 14, l + 1, 16);
     }
 
     @Override
