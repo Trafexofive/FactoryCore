@@ -1,0 +1,15 @@
+{
+    "itemGroup.factorycore": "Factory Core",
+    "block.factorycore.machine_casing": "Machine Casing",
+    "block.factorycore.electric_furnace_controller": "Electric Furnace Controller",
+    "block.factorycore.auto_assembler_controller": "Auto Assembler Controller",
+    "block.factorycore.electrical_floor": "Electrical Floor",
+    "block.factorycore.creative_energy_source": "Creative Energy Source",
+    "block.factorycore.electrical_pole": "Electrical Pole",
+    "block.factorycore.solar_panel": "Solar Panel",
+    "block.factorycore.battery": "Battery",
+    "item.factorycore.multimeter": "Multimeter",
+    "block.factorycore.machine_casing.desc": "A sturdy base for multiblock machines.",
+    "block.factorycore.electrical_floor.desc": "Transfers power horizontally to adjacent blocks.",
+    "tooltip.factorycore.energy": "Energy: %s / %s FE"
+}

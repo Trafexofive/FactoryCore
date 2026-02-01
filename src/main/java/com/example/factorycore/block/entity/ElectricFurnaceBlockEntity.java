@@ -24,7 +24,7 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
     private static final int ENERGY_PER_TICK = 100;
     private int progress = 0;
     private int maxProgress = 100;
-    
+
     // Sync Energy to Client Menu
     protected final ContainerData data = new ContainerData() {
         @Override
@@ -39,7 +39,8 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
 
         @Override
         public void set(int index, int value) {
-            if (index == 1) progress = value;
+            if (index == 1)
+                progress = value;
         }
 
         @Override
@@ -79,7 +80,7 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
                         }
                     } else {
                         // Enforce hollow center
-                        p.add(x, y, z, net.minecraft.world.level.block.Blocks.AIR);
+                        p.add(x, y, z, state -> state.isAir());
                     }
                 }
             }
@@ -110,9 +111,9 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
         // For now, let's just use vanilla Smelting recipes or simple mock
         // Since we are technical, we'll use actual RecipeManager later.
         // For prototype: If Iron Ingot -> Steel (mock) or just Vanilla Smelt.
-        
-        Optional<SmeltingRecipe> recipe = level.getRecipeManager().getRecipeFor(RecipeType.SMELTING, 
-            new net.minecraft.world.item.crafting.SingleRecipeInput(input), level).map(h -> h.value());
+
+        Optional<SmeltingRecipe> recipe = level.getRecipeManager().getRecipeFor(RecipeType.SMELTING,
+                new net.minecraft.world.item.crafting.SingleRecipeInput(input), level).map(h -> h.value());
 
         if (recipe.isPresent()) {
             ItemStack result = recipe.get().getResultItem(level.registryAccess());
@@ -133,8 +134,10 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
 
     private boolean canOutput(ItemStack stack) {
         ItemStack currentOutput = inventory.getStackInSlot(1);
-        if (currentOutput.isEmpty()) return true;
-        if (!ItemStack.isSameItemSameComponents(currentOutput, stack)) return false;
+        if (currentOutput.isEmpty())
+            return true;
+        if (!ItemStack.isSameItemSameComponents(currentOutput, stack))
+            return false;
         return currentOutput.getCount() + stack.getCount() <= stack.getMaxStackSize();
     }
 }

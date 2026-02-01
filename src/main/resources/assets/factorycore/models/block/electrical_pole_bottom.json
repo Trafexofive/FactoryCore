@@ -1,0 +1,43 @@
+{
+    "parent": "minecraft:block/block",
+    "textures": {
+        "pole": "factorycore:block/electrical_pole",
+        "particle": "factorycore:block/electrical_pole"
+    },
+    "elements": [
+        {
+            "from": [
+                6,
+                0,
+                6
+            ],
+            "to": [
+                10,
+                16,
+                10
+            ],
+            "faces": {
+                "down": {
+                    "texture": "#pole",
+                    "cullface": "down"
+                },
+                "up": {
+                    "texture": "#pole",
+                    "cullface": "up"
+                },
+                "north": {
+                    "texture": "#pole"
+                },
+                "south": {
+                    "texture": "#pole"
+                },
+                "west": {
+                    "texture": "#pole"
+                },
+                "east": {
+                    "texture": "#pole"
+                }
+            }
+        }
+    ]
+}

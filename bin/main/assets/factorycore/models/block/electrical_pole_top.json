@@ -1,0 +1,74 @@
+{
+    "parent": "minecraft:block/block",
+    "textures": {
+        "pole": "factorycore:block/electrical_pole",
+        "cap": "factorycore:block/electrical_pole",
+        "particle": "factorycore:block/electrical_pole"
+    },
+    "elements": [
+        {
+            "comment": "Main pole shaft",
+            "from": [
+                6,
+                0,
+                6
+            ],
+            "to": [
+                10,
+                14,
+                10
+            ],
+            "faces": {
+                "down": {
+                    "texture": "#pole"
+                },
+                "north": {
+                    "texture": "#pole"
+                },
+                "south": {
+                    "texture": "#pole"
+                },
+                "west": {
+                    "texture": "#pole"
+                },
+                "east": {
+                    "texture": "#pole"
+                }
+            }
+        },
+        {
+            "comment": "Pole cap/insulator",
+            "from": [
+                4,
+                14,
+                4
+            ],
+            "to": [
+                12,
+                16,
+                12
+            ],
+            "faces": {
+                "down": {
+                    "texture": "#cap"
+                },
+                "up": {
+                    "texture": "#cap",
+                    "cullface": "up"
+                },
+                "north": {
+                    "texture": "#cap"
+                },
+                "south": {
+                    "texture": "#cap"
+                },
+                "west": {
+                    "texture": "#cap"
+                },
+                "east": {
+                    "texture": "#cap"
+                }
+            }
+        }
+    ]
+}

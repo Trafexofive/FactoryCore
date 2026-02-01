@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "minecraft:block/smooth_stone"
+    "all": "factorycore:block/electrical_floor"
   }
 }

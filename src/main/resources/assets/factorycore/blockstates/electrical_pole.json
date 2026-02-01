@@ -1,0 +1,13 @@
+{
+    "variants": {
+        "part=bottom": {
+            "model": "factorycore:block/electrical_pole_bottom"
+        },
+        "part=middle": {
+            "model": "factorycore:block/electrical_pole_middle"
+        },
+        "part=top": {
+            "model": "factorycore:block/electrical_pole_top"
+        }
+    }
+}

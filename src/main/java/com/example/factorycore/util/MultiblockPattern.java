@@ -30,13 +30,16 @@ public class MultiblockPattern {
     public boolean matches(Level level, BlockPos origin, net.minecraft.core.Direction facing) {
         for (Map.Entry<BlockPos, Predicate<BlockState>> entry : pattern.entrySet()) {
             BlockPos rel = entry.getKey();
-            
+
             // Rotate relative position based on facing
-            // Assuming default pattern is facing NORTH (Z-)
             BlockPos rotatedRel = rotate(rel, facing);
             BlockPos target = origin.offset(rotatedRel);
-            
-            if (!entry.getValue().test(level.getBlockState(target))) {
+
+            BlockState targetState = level.getBlockState(target);
+            if (!entry.getValue().test(targetState)) {
+                // Debug logging
+                System.out.println("Structure check failed at relative " + rel + " (rotated " + rotatedRel + ")");
+                System.out.println("Expected match, found: " + targetState);
                 return false;
             }
         }
@@ -51,7 +54,7 @@ public class MultiblockPattern {
             default -> pos; // NORTH is base
         };
     }
-    
+
     public Map<BlockPos, Predicate<BlockState>> getPattern() {
         return pattern;
     }

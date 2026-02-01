@@ -15,4 +15,11 @@ public class ClientModEventSubscriber {
         event.register(CoreMenus.ELECTRIC_FURNACE.get(), ElectricFurnaceScreen::new);
         event.register(CoreMenus.AUTO_ASSEMBLER.get(), com.example.factorycore.client.gui.AutoAssemblerScreen::new);
     }
+
+    @SubscribeEvent
+    public static void registerRenderers(
+            net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.ELECTRICAL_POLE.get(),
+                com.example.factorycore.client.renderer.ElectricalPoleRenderer::new);
+    }
 }
