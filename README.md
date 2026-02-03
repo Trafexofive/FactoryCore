@@ -1,7 +1,7 @@
 # FactoryCore
 
 ## Overview
-FactoryCore is the industrial heart of the modpack, providing heavy-duty multiblock machinery powered by Forge Energy (FE). It integrates with **GhostLib** for blueprinting and drone construction.
+FactoryCore is the industrial heart of the modpack, providing Factorio-grade, heavy-duty multiblock machinery powered by Forge Energy (FE). Designed for scalability with support for 10,000+ concurrent operations. It integrates with **GhostLib** for blueprinting and drone construction.
 
 ## Features
 *   **Multiblock Machinery:** 3x3x3 structures for high-throughput processing.
