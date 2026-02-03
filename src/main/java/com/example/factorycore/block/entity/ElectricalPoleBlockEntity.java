@@ -85,11 +85,16 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
             if (p.equals(worldPosition)) return;
             double d = p.distSqr(worldPosition);
             if (d > MAX_RANGE_SQR) return; // Inclusive check
-            
+
+            // Check for electrical poles first
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity other) {
                 if (other.connections.size() < 5) {
                     candidates.add(p.immutable());
                 }
+            }
+            // Check for machines with energy capabilities
+            else if (hasEnergyCapability(p)) {
+                candidates.add(p.immutable());
             }
         });
 
@@ -102,7 +107,27 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
             if (be instanceof ElectricalPoleBlockEntity other && other.connections.size() < 5) {
                  this.connect(p);
             }
+            // Connect to machines with energy capabilities
+            else if (hasEnergyCapability(p)) {
+                this.connect(p);
+            }
         }
+    }
+
+    /**
+     * Check if a block has an energy capability that we can connect to
+     */
+    private boolean hasEnergyCapability(BlockPos pos) {
+        net.neoforged.neoforge.capabilities.BlockCapability<net.neoforged.neoforge.energy.IEnergyStorage, net.minecraft.core.Direction> capability =
+            net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK;
+
+        for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
+            net.neoforged.neoforge.energy.IEnergyStorage storage = level.getCapability(capability, pos, direction.getOpposite());
+            if (storage != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void connect(BlockPos other) {
