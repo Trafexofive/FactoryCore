@@ -4,6 +4,8 @@ import com.example.factorycore.block.entity.AbstractFactoryMultiblockBlockEntity
 import com.example.factorycore.block.entity.ElectricFurnaceBlockEntity;
 import com.example.factorycore.registry.CoreBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.RenderShape;
@@ -22,7 +24,7 @@ public class ElectricFurnaceControllerBlock extends BaseEntityBlock {
 
     public ElectricFurnaceControllerBlock(Properties properties) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any().setValue(BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.NORTH));
+        this.registerDefaultState(this.stateDefinition.any().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH));
     }
 
     @Override
@@ -56,6 +58,20 @@ public class ElectricFurnaceControllerBlock extends BaseEntityBlock {
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(net.minecraft.world.level.Level level, BlockState state, BlockEntityType<T> type) {
         return createTickerHelper(type, CoreBlockEntities.ELECTRIC_FURNACE.get(), AbstractFactoryMultiblockBlockEntity::tick);
+    }
+
+    @Override
+    protected ItemInteractionResult useItemOn(net.minecraft.world.item.ItemStack stack, BlockState state, Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hitResult) {
+        net.minecraft.tags.TagKey<net.minecraft.world.item.Item> wrenchTag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM, net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("c", "tools/wrench"));
+        
+        if (stack.is(wrenchTag)) {
+            if (!level.isClientSide) {
+                Direction current = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+                level.setBlock(pos, state.setValue(BlockStateProperties.HORIZONTAL_FACING, current.getClockWise()), 3);
+            }
+            return ItemInteractionResult.SUCCESS;
+        }
+        return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
     }
 
     @Override

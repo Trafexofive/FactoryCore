@@ -34,6 +34,13 @@ public class ElectricFurnaceScreen extends AbstractContainerScreen<ElectricFurna
         this.renderTooltip(graphics, mouseX, mouseY);
         
         // Display Energy
-        graphics.drawString(this.font, "FE: " + this.menu.getEnergy(), this.leftPos + 8, this.topPos + 6, 0x404040, false);
+        String energyText = formatEnergy(this.menu.getEnergy()) + " FE";
+        graphics.drawString(this.font, energyText, this.leftPos + 8, this.topPos + 6, 0x404040, false);
+    }
+
+    private String formatEnergy(int energy) {
+        if (energy >= 1_000_000) return String.format("%.1fM", energy / 1_000_000.0);
+        if (energy >= 1_000) return String.format("%.1fK", energy / 1_000.0);
+        return String.valueOf(energy);
     }
 }

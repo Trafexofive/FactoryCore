@@ -21,5 +21,9 @@ public class ClientModEventSubscriber {
             net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.ELECTRICAL_POLE.get(),
                 com.example.factorycore.client.renderer.ElectricalPoleRenderer::new);
+        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.ELECTRIC_FURNACE.get(),
+                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
+        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.AUTO_ASSEMBLER.get(),
+                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
     }
 }

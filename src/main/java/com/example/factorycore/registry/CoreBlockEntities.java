@@ -52,6 +52,12 @@ public class CoreBlockEntities {
                                                         com.example.factorycore.block.entity.SolarPanelBlockEntity::new,
                                                         CoreBlocks.SOLAR_PANEL.get()).build(null));
 
+        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<com.example.factorycore.block.entity.PipeBlockEntity>> PIPE = BLOCK_ENTITIES
+                        .register("pipe",
+                                        () -> BlockEntityType.Builder.of(
+                                                        com.example.factorycore.block.entity.PipeBlockEntity::new,
+                                                        CoreBlocks.PIPE.get()).build(null));
+
         public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<com.example.factorycore.block.entity.BatteryBlockEntity>> BATTERY = BLOCK_ENTITIES
                         .register("battery",
                                         () -> BlockEntityType.Builder.of(

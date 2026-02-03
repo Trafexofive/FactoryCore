@@ -24,11 +24,22 @@ public class FactoryCore {
 
 
 
-    public FactoryCore(IEventBus modEventBus) {
+        public FactoryCore(IEventBus modEventBus) {
+        com.example.factorycore.util.FactoryLogger.init();
 
-        CoreBlocks.register(modEventBus);
+        com.example.factorycore.registry.CoreCreativeTabs.register(modEventBus);
 
-        CoreItems.register(modEventBus);
+
+
+            CoreBlocks.register(modEventBus);
+
+
+
+            CoreItems.register(modEventBus);
+
+
+
+    
 
         CoreBlockEntities.register(modEventBus);
 

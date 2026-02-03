@@ -42,7 +42,11 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
         if (!level.isClientSide && !state.is(oldState.getBlock())) {
-            FactoryNetworkManager.get(level).addNode(pos);
+            FactoryNetworkManager manager = FactoryNetworkManager.get(level);
+            if (manager != null) {
+                manager.addNode(pos);
+                manager.setDirty();
+            }
         }
         super.onPlace(state, level, pos, oldState, isMoving);
     }

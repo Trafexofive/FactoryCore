@@ -40,6 +40,11 @@ public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEnti
     }
 
     @Override
+    protected int getInventorySize() {
+        return 11; // 9 slots for 3x3 crafting grid + 1 output slot + 1 extra for flexibility
+    }
+
+    @Override
     public Component getDisplayName() { return Component.literal("Auto Assembler"); }
 
     @Override
@@ -51,9 +56,9 @@ public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEnti
     public MultiblockPattern getPattern() {
         MultiblockPattern p = new MultiblockPattern(3, 3, 3);
         for (int x = -1; x <= 1; x++) {
-            for (int y = -1; y <= 1; y++) {
+            for (int y = 0; y <= 2; y++) {
                 for (int z = 0; z <= 2; z++) {
-                    boolean isEdge = (x == -1 || x == 1 || y == -1 || y == 1 || z == 0 || z == 2);
+                    boolean isEdge = (x == -1 || x == 1 || y == 0 || y == 2 || z == 0 || z == 2);
                     if (isEdge) {
                         if (x == 0 && y == 0 && z == 0) {
                             p.add(x, y, z, CoreBlocks.AUTO_ASSEMBLER_CONTROLLER.get());
@@ -77,26 +82,92 @@ public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEnti
             return;
         }
 
-        ItemStack input = inventory.getStackInSlot(0);
-        if (input.isEmpty()) {
+        // Check if we have a valid recipe in the 3x3 grid
+        ItemStack result = getCraftingResult();
+        if (result.isEmpty()) {
             progress = 0;
             return;
         }
-
-        // Test Logic: Duplicate Item
-        ItemStack result = input.copy();
-        result.setCount(1);
 
         if (canOutput(result)) {
             energy.extractEnergy(ENERGY_PER_TICK, false);
             progress++;
             if (progress >= maxProgress) {
-                inventory.insertItem(1, result, false);
+                // Consume the ingredients from the 3x3 grid
+                consumeIngredients();
+                // Output the result
+                inventory.insertItem(10, result, false); // Output slot is 10
                 progress = 0;
             }
             setChanged();
         } else {
             progress = 0;
+        }
+    }
+
+    /**
+     * Gets the crafting result for the current 3x3 grid
+     */
+    private ItemStack getCraftingResult() {
+        // Create a SimpleContainer to represent the crafting grid
+        net.minecraft.world.SimpleContainer craftingGrid = new net.minecraft.world.SimpleContainer(9);
+        for (int i = 0; i < 9; i++) {
+            craftingGrid.setItem(i, inventory.getStackInSlot(i).copy());
+        }
+
+        // Create the crafting input from the container
+        net.minecraft.world.item.crafting.CraftingInput craftingInput = net.minecraft.world.item.crafting.CraftingInput.of(3, 3, craftingGrid.getItems());
+
+        // Get the recipe manager and find a matching recipe
+        if (level != null) {
+            java.util.Optional<net.minecraft.world.item.crafting.RecipeHolder<net.minecraft.world.item.crafting.CraftingRecipe>> recipe = level.getRecipeManager()
+                .getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING, craftingInput, level);
+
+            if (recipe.isPresent()) {
+                return recipe.get().value().assemble(craftingInput, level.registryAccess());
+            }
+        }
+
+        return ItemStack.EMPTY;
+    }
+
+    /**
+     * Consumes the ingredients from the 3x3 grid after crafting
+     */
+    private void consumeIngredients() {
+        // Create a SimpleContainer to represent the crafting grid
+        net.minecraft.world.SimpleContainer craftingGrid = new net.minecraft.world.SimpleContainer(9);
+        for (int i = 0; i < 9; i++) {
+            craftingGrid.setItem(i, inventory.getStackInSlot(i).copy());
+        }
+
+        // Create the crafting input from the container
+        net.minecraft.world.item.crafting.CraftingInput craftingInput = net.minecraft.world.item.crafting.CraftingInput.of(3, 3, craftingGrid.getItems());
+
+        // Get the recipe manager and find a matching recipe
+        if (level != null) {
+            java.util.Optional<net.minecraft.world.item.crafting.RecipeHolder<net.minecraft.world.item.crafting.CraftingRecipe>> recipe = level.getRecipeManager()
+                .getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING, craftingInput, level);
+
+            if (recipe.isPresent()) {
+                // Get the recipe's ingredients and match them to items in the grid
+                java.util.List<net.minecraft.world.item.crafting.Ingredient> recipeIngredients = recipe.get().value().getIngredients();
+
+                // For each ingredient in the recipe, find and consume a matching item from the grid
+                for (net.minecraft.world.item.crafting.Ingredient ingredient : recipeIngredients) {
+                    if (!ingredient.isEmpty()) {
+                        // Find a matching item in the grid
+                        for (int slot = 0; slot < 9; slot++) {
+                            ItemStack stackInSlot = inventory.getStackInSlot(slot);
+                            if (!stackInSlot.isEmpty() && ingredient.test(stackInSlot)) {
+                                // Consume from the actual inventory
+                                inventory.extractItem(slot, 1, false);
+                                break; // Move to next ingredient
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -23,14 +23,27 @@ public class AutoAssemblerMenu extends AbstractContainerMenu {
         super(CoreMenus.AUTO_ASSEMBLER.get(), containerId);
         this.blockEntity = entity;
         this.data = data;
-        
+
         ItemStackHandler handler = entity.getInventory();
-        
-        this.addSlot(new SlotItemHandler(handler, 0, 56, 35));
-        this.addSlot(new SlotItemHandler(handler, 1, 116, 35) {
-            @Override public boolean mayPlace(ItemStack stack) { return false; }
+
+        // Add 3x3 crafting grid (slots 0-8)
+        int gridStartX = 30;
+        int gridStartY = 17;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+                this.addSlot(new SlotItemHandler(handler, row * 3 + col, gridStartX + col * 18, gridStartY + row * 18));
+            }
+        }
+
+        // Add output slot (slot 9)
+        this.addSlot(new SlotItemHandler(handler, 9, 124, 35) {
+            @Override
+            public boolean mayPlace(ItemStack stack) {
+                return false; // Output slot - items can't be placed in it
+            }
         });
 
+        // Player inventory
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 9; ++j) {
                 this.addSlot(new Slot(inv, j + i * 9 + 9, 8 + j * 18, 84 + i * 18));
@@ -40,7 +53,7 @@ public class AutoAssemblerMenu extends AbstractContainerMenu {
         for (int k = 0; k < 9; ++k) {
             this.addSlot(new Slot(inv, k, 8 + k * 18, 142));
         }
-        
+
         this.addDataSlots(data);
     }
 
@@ -51,13 +64,31 @@ public class AutoAssemblerMenu extends AbstractContainerMenu {
         if (slot != null && slot.hasItem()) {
             ItemStack itemstack1 = slot.getItem();
             itemstack = itemstack1.copy();
-            if (index < 2) {
-                if (!this.moveItemStackTo(itemstack1, 2, 38, true)) {
+
+            // Define slot ranges
+            int machineSlots = 10; // 9 crafting slots + 1 output slot
+            int playerInventoryStart = machineSlots;
+            int playerHotbarStart = playerInventoryStart + 27; // 27 inventory slots
+            int totalSlots = playerHotbarStart + 9; // 9 hotbar slots
+
+            if (index < machineSlots) {
+                // Moving from machine to player inventory
+                if (!this.moveItemStackTo(itemstack1, playerInventoryStart, totalSlots, true)) {
                     return ItemStack.EMPTY;
                 }
             } else {
-                if (!this.moveItemStackTo(itemstack1, 0, 1, false)) {
-                    return ItemStack.EMPTY;
+                // Moving from player inventory to machine
+                // Try to put into crafting grid first (slots 0-8), then to hotbar if output slot
+                if (index < playerHotbarStart) {
+                    // From main inventory to crafting grid
+                    if (!this.moveItemStackTo(itemstack1, 0, 9, false)) { // Only to crafting grid (slots 0-8)
+                        return ItemStack.EMPTY;
+                    }
+                } else {
+                    // From hotbar to crafting grid
+                    if (!this.moveItemStackTo(itemstack1, 0, 9, false)) { // Only to crafting grid (slots 0-8)
+                        return ItemStack.EMPTY;
+                    }
                 }
             }
 

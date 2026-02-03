@@ -20,6 +20,7 @@ import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -32,6 +33,7 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
     protected boolean isFormed = false;
     protected int checkTimer = 0;
     protected Direction cachedFacing = Direction.NORTH;
+    protected BlockPos connectedFloor = null;
 
     // --- Storage ---
     protected final ItemStackHandler inventory = createItemHandler();
@@ -83,9 +85,8 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
             be.recheckStructure();
         }
 
-        if (be.isFormed) {
-            be.serverTick();
-        }
+        // Run machine logic regardless of formation (implementations handle isFormed check)
+        be.serverTick();
     }
 
     public void recheckStructure() {
@@ -130,20 +131,34 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
         clearPorts();
         if (level == null) return;
 
-        // Default: Check all 6 sides of the controller itself
-        for (Direction dir : Direction.values()) {
-            BlockPos neighborPos = worldPosition.relative(dir);
-            
-            if (level.getCapability(Capabilities.ItemHandler.BLOCK, neighborPos, dir.getOpposite()) != null) {
-                itemPorts.put(dir, neighborPos);
-            }
-            if (level.getCapability(Capabilities.FluidHandler.BLOCK, neighborPos, dir.getOpposite()) != null) {
-                fluidPorts.put(dir, neighborPos);
-            }
-            if (level.getCapability(Capabilities.EnergyStorage.BLOCK, neighborPos, dir.getOpposite()) != null) {
-                energyPorts.put(dir, neighborPos);
+        // Factorio Grade: Scan neighbors of the entire 3x3 footprint
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                BlockPos basePart = worldPosition.offset(x, 0, z);
+                for (Direction dir : Direction.values()) {
+                    BlockPos neighborPos = basePart.relative(dir);
+                    // Skip internal blocks
+                    if (isInternal(neighborPos)) continue;
+
+                    if (level.getCapability(Capabilities.ItemHandler.BLOCK, neighborPos, dir.getOpposite()) != null) {
+                        itemPorts.put(dir, neighborPos);
+                    }
+                    if (level.getCapability(Capabilities.FluidHandler.BLOCK, neighborPos, dir.getOpposite()) != null) {
+                        fluidPorts.put(dir, neighborPos);
+                    }
+                    if (level.getCapability(Capabilities.EnergyStorage.BLOCK, neighborPos, dir.getOpposite()) != null) {
+                        energyPorts.put(dir, neighborPos);
+                    }
+                }
             }
         }
+    }
+
+    private boolean isInternal(BlockPos pos) {
+        int dx = pos.getX() - worldPosition.getX();
+        int dy = pos.getY() - worldPosition.getY();
+        int dz = pos.getZ() - worldPosition.getZ();
+        return Math.abs(dx) <= 1 && Math.abs(dy) <= 2 && Math.abs(dz) <= 1;
     }
 
     private void clearPorts() {
@@ -209,7 +224,40 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
 
     protected IEnergyStorage getFloorEnergy() {
         if (level == null) return null;
-        return level.getCapability(Capabilities.EnergyStorage.BLOCK, worldPosition.below(), Direction.UP);
+        
+        BlockPos bestFloor = null;
+        double minDist = Double.MAX_VALUE;
+        IEnergyStorage bestStorage = null;
+
+        // Scan 3x3 footprint under the multiblock, but also search up to 4 blocks for bridging
+        for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-4, -2, -4), worldPosition.offset(4, 0, 4))) {
+            if (level.getBlockState(p).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get())) {
+                IEnergyStorage e = level.getCapability(Capabilities.EnergyStorage.BLOCK, p, Direction.UP);
+                if (e != null) {
+                    double d = p.distSqr(worldPosition);
+                    if (d < minDist) {
+                        minDist = d;
+                        bestFloor = p.immutable();
+                        bestStorage = e;
+                    }
+                }
+            }
+        }
+
+        if (bestFloor != null) {
+            if (!bestFloor.equals(this.connectedFloor)) {
+                this.connectedFloor = bestFloor;
+                setChanged();
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            }
+            return bestStorage;
+        } else if (this.connectedFloor != null) {
+            this.connectedFloor = null;
+            setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+
+        return null;
     }
 
     // --- Persistence ---
@@ -221,6 +269,7 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
         tag.putInt("Facing", cachedFacing.get3DDataValue());
         tag.put("Inventory", inventory.serializeNBT(registries));
         tag.put("Fluids", fluidTank.writeToNBT(registries, new CompoundTag()));
+        if (connectedFloor != null) tag.putLong("ConnectedFloor", connectedFloor.asLong());
         
         // Save Ports
         tag.put("ItemPorts", savePortMap(itemPorts));
@@ -235,6 +284,7 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
         this.cachedFacing = Direction.from3DDataValue(tag.getInt("Facing"));
         this.inventory.deserializeNBT(registries, tag.getCompound("Inventory"));
         if (tag.contains("Fluids")) this.fluidTank.readFromNBT(registries, tag.getCompound("Fluids"));
+        if (tag.contains("ConnectedFloor")) this.connectedFloor = BlockPos.of(tag.getLong("ConnectedFloor"));
         
         loadPortMap(tag.getList("ItemPorts", Tag.TAG_COMPOUND), itemPorts);
         loadPortMap(tag.getList("FluidPorts", Tag.TAG_COMPOUND), fluidPorts);
@@ -262,7 +312,33 @@ public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
 
     // --- Getters ---
     public ItemStackHandler getInventory() { return inventory; }
+    
+    // Provide Capability access
+    public net.neoforged.neoforge.items.IItemHandler getItemHandler(@Nullable Direction side) {
+        return inventory;
+    }
+
+    public net.neoforged.neoforge.fluids.capability.IFluidHandler getFluidHandler(@Nullable Direction side) {
+        return fluidTank;
+    }
+
     public FluidTank getFluidTank() { return fluidTank; }
     public boolean isFormed() { return isFormed; }
     public Direction getFacing() { return cachedFacing; }
+    public BlockPos getConnectedFloor() { return connectedFloor; }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveWithoutMetadata(registries);
+    }
+
+    @Override
+    public net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public void onDataPacket(net.minecraft.network.Connection net, net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider lookupProvider) {
+        if (pkt.getTag() != null) loadAdditional(pkt.getTag(), lookupProvider);
+    }
 }

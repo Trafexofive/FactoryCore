@@ -17,8 +17,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class SolarPanelBlock extends BaseEntityBlock {
-    // Flat shape: 4 pixels high
-    private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 4, 16);
+    // Flat shape: 2 pixels high
+    private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 2, 16);
     public static final com.mojang.serialization.MapCodec<SolarPanelBlock> CODEC = simpleCodec(SolarPanelBlock::new);
 
     public SolarPanelBlock(Properties properties) {

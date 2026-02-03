@@ -13,7 +13,7 @@ import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 
 public class SolarPanelBlockEntity extends BlockEntity {
-    private final EnergyStorage energyStorage = new EnergyStorage(1000, 0, 1000); // Receive 0, Extract 1000
+    private final SolarEnergyStorage energyStorage = new SolarPanelBlockEntity.SolarEnergyStorage(1000, 0, 1000);
 
     public SolarPanelBlockEntity(BlockPos pos, BlockState state) {
         super(CoreBlockEntities.SOLAR_PANEL.get(), pos, state);
@@ -26,7 +26,7 @@ public class SolarPanelBlockEntity extends BlockEntity {
         // Generation logic
         if (level.isDay() && !level.isRaining()) {
             if (level.canSeeSkyFromBelowWater(pos.above())) {
-                be.energyStorage.receiveEnergy(16, false); // Bypass receive limit internally
+                be.energyStorage.generate(16); // Direct generation
             }
         }
 
@@ -66,5 +66,15 @@ public class SolarPanelBlockEntity extends BlockEntity {
 
     public IEnergyStorage getEnergyStorage() {
         return energyStorage;
+    }
+
+    private static class SolarEnergyStorage extends EnergyStorage {
+        public SolarEnergyStorage(int capacity, int maxReceive, int maxExtract) {
+            super(capacity, maxReceive, maxExtract);
+        }
+
+        public void generate(int amount) {
+            this.energy = Math.min(capacity, this.energy + amount);
+        }
     }
 }

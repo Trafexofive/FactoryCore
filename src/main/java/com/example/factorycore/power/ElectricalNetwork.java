@@ -24,7 +24,7 @@ public class ElectricalNetwork {
         // 1M FE buffer per network, max transfer 10k/t
         this.energyBuffer = new EnergyStorage(1000000, 10000, 10000) {
             @Override
-            public int receiveEnergy(int maxReceive, boolean simulate) {
+            public synchronized int receiveEnergy(int maxReceive, boolean simulate) {
                 int r = super.receiveEnergy(maxReceive, simulate);
                 // Mark dirty only if energy actually changed
                 if (r > 0 && !simulate) dirty = true;
@@ -32,10 +32,15 @@ public class ElectricalNetwork {
             }
 
             @Override
-            public int extractEnergy(int maxExtract, boolean simulate) {
+            public synchronized int extractEnergy(int maxExtract, boolean simulate) {
                 int r = super.extractEnergy(maxExtract, simulate);
                 if (r > 0 && !simulate) dirty = true;
                 return r;
+            }
+
+            @Override
+            public synchronized int getEnergyStored() {
+                return super.getEnergyStored();
             }
         };
     }
@@ -47,12 +52,14 @@ public class ElectricalNetwork {
     public void addNode(BlockPos pos) {
         if (members.add(pos)) {
             dirty = true;
+            com.example.factorycore.util.FactoryLogger.power("Network " + id + " added node at " + pos + ". Total members: " + members.size());
         }
     }
 
     public void removeNode(BlockPos pos) {
         if (members.remove(pos)) {
             dirty = true;
+            com.example.factorycore.util.FactoryLogger.power("Network " + id + " removed node at " + pos + ". Remaining: " + members.size());
         }
     }
 
@@ -73,6 +80,9 @@ public class ElectricalNetwork {
     }
 
     public void merge(ElectricalNetwork other) {
+        if (other == this) return;
+        com.example.factorycore.util.FactoryLogger.power("Merging Network " + other.getId() + " into Network " + this.id);
+
         // Absorb members
         this.members.addAll(other.members);
         // Absorb energy
@@ -84,6 +94,7 @@ public class ElectricalNetwork {
         this.energyBuffer.receiveEnergy(toAdd, false);
         
         this.dirty = true;
+        com.example.factorycore.util.FactoryLogger.power("Network " + id + " merged. New size: " + members.size() + ", Energy: " + energyBuffer.getEnergyStored());
     }
 
     // Serialization

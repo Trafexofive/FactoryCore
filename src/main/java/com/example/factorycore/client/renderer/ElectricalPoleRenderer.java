@@ -28,6 +28,13 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
         
         if (be.getLevel() == null || be.getConnections().isEmpty()) return;
 
+        // EXTRA SAFETY: Only render for the bottom block.
+        // This handles legacy worlds where middle/top blocks might still have BEs.
+        if (be.getBlockState().hasProperty(com.example.factorycore.block.ElectricalPoleBlock.PART) &&
+            be.getBlockState().getValue(com.example.factorycore.block.ElectricalPoleBlock.PART) != com.example.factorycore.block.ElectricalPoleBlock.PolePart.BOTTOM) {
+            return;
+        }
+
         BlockPos origin = be.getBlockPos();
         // Use entityCutout for sharp edges on the wire
         VertexConsumer consumer = bufferSource.getBuffer(RenderType.entityCutout(InventoryMenu.BLOCK_ATLAS));
@@ -42,16 +49,26 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
         poseStack.pushPose();
         Matrix4f pose = poseStack.last().pose();
 
+        // 1. Render Cable to Floor Node
+        BlockPos floor = be.getConnectedFloor();
+        if (floor != null) {
+            double fdx = floor.getX() - origin.getX();
+            double fdy = floor.getY() - origin.getY();
+            double fdz = floor.getZ() - origin.getZ();
+            Vec3 floorEnd = new Vec3(fdx + 0.5, fdy + 1.0, fdz + 0.5); // Center-top of floor
+            drawCatenary(consumer, pose, start, floorEnd, 0.07f, packedLight, packedOverlay, sprite);
+        }
+
+        // 2. Render Cables to other Poles
         for (BlockPos target : be.getConnections()) {
-            // STRICT DEDUPLICATION: Only draw if Origin ID < Target ID.
-            // This prevents drawing the wire twice (once from A->B and again from B->A).
+            // Draw if Origin Long ID < Target Long ID to avoid double-drawing
             if (origin.asLong() < target.asLong()) {
                 
-                // SAFETY: Don't draw lines to infinity. Max 25 blocks (squared = 625).
-                if (origin.distSqr(target) > 625) continue;
+                // Match MAX_RANGE_SQR (16.1)
+                double distSqr = origin.distSqr(target);
+                if (distSqr > 16.1) continue; 
 
-                // Verify target exists and is a pole to avoid ghost lines
-                if (be.getLevel().getBlockEntity(target) instanceof ElectricalPoleBlockEntity) {
+                if (be.getLevel().getBlockEntity(target) instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity) {
                     
                     double dx = target.getX() - origin.getX();
                     double dy = target.getY() - origin.getY();
@@ -60,14 +77,38 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
                     // Target connection point
                     Vec3 end = new Vec3(dx + 0.5, dy + 2.8, dz + 0.5);
 
-                    // Draw Single Straight Segment
-                    // Use a slightly thicker width (0.07f) for better visibility
-                    drawCrossSegment(consumer, pose, start, end, 0.07f, packedLight, packedOverlay, sprite);
+                    // Draw Catenary Curve (Drooping Wire)
+                    drawCatenary(consumer, pose, start, end, 0.07f, packedLight, packedOverlay, sprite);
                 }
             }
         }
 
         poseStack.popPose();
+    }
+
+    private void drawCatenary(VertexConsumer consumer, Matrix4f pose, Vec3 start, Vec3 end, 
+                              float width, int light, int overlay, TextureAtlasSprite sprite) {
+        int segments = 8;
+        float sag = 0.5f; // Maximum droop in blocks
+        
+        Vec3 prev = start;
+        for (int i = 1; i <= segments; i++) {
+            float t = (float) i / segments;
+            
+            // Linear interpolation
+            double lx = start.x + (end.x - start.x) * t;
+            double ly = start.y + (end.y - start.y) * t;
+            double lz = start.z + (end.z - start.z) * t;
+            
+            // Add droop (parabola approximation is sufficient and cheaper than cosh)
+            // 4 * sag * t * (1-t) gives a symmetric parabola with peak at t=0.5
+            double droop = 4 * sag * t * (1 - t);
+            
+            Vec3 current = new Vec3(lx, ly - droop, lz);
+            
+            drawCrossSegment(consumer, pose, prev, current, width, light, overlay, sprite);
+            prev = current;
+        }
     }
 
     private void drawCrossSegment(VertexConsumer consumer, Matrix4f pose, Vec3 startVec, Vec3 endVec, 
@@ -99,11 +140,16 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
         float r = 0.15f, g = 0.15f, b = 0.15f; // Dark Gray Wire
 
         // Draw 2 intersecting planes (Cross shape)
-        addDoubleSidedQuad(consumer, pose, start, end, right, r, g, b, light, overlay, sprite);
-        addDoubleSidedQuad(consumer, pose, start, end, localUp, r, g, b, light, overlay, sprite);
+        // Correct normals for each face
+        
+        // Plane 1: Spans 'right', Normal is 'localUp'
+        addDoubleSidedQuad(consumer, pose, start, end, right, localUp, r, g, b, light, overlay, sprite);
+        
+        // Plane 2: Spans 'localUp', Normal is 'right'
+        addDoubleSidedQuad(consumer, pose, start, end, localUp, right, r, g, b, light, overlay, sprite);
     }
 
-    private void addDoubleSidedQuad(VertexConsumer consumer, Matrix4f pose, Vector3f p1, Vector3f p2, Vector3f widthVec, 
+    private void addDoubleSidedQuad(VertexConsumer consumer, Matrix4f pose, Vector3f p1, Vector3f p2, Vector3f widthVec, Vector3f normalVec,
                          float r, float g, float b, int light, int overlay, TextureAtlasSprite sprite) {
         
         float u0 = sprite.getU0();
@@ -117,17 +163,19 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
         float x3 = p2.x + widthVec.x; float y3 = p2.y + widthVec.y; float z3 = p2.z + widthVec.z;
         float x4 = p2.x - widthVec.x; float y4 = p2.y - widthVec.y; float z4 = p2.z - widthVec.z;
 
-        // Front Face
-        consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, 1.0f).setUv(u0, v0).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, 1.0f).setUv(u1, v0).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x3, y3, z3).setColor(r, g, b, 1.0f).setUv(u1, v1).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x4, y4, z4).setColor(r, g, b, 1.0f).setUv(u0, v1).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
+        float nx = normalVec.x; float ny = normalVec.y; float nz = normalVec.z;
 
-        // Back Face (Inverse winding order)
-        consumer.addVertex(pose, x4, y4, z4).setColor(r, g, b, 1.0f).setUv(u0, v1).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x3, y3, z3).setColor(r, g, b, 1.0f).setUv(u1, v1).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, 1.0f).setUv(u1, v0).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
-        consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, 1.0f).setUv(u0, v0).setOverlay(overlay).setLight(light).setNormal(0, 1, 0);
+        // Front Face (Normal +N)
+        consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, 1.0f).setUv(u0, v0).setOverlay(overlay).setLight(light).setNormal(nx, ny, nz);
+        consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, 1.0f).setUv(u1, v0).setOverlay(overlay).setLight(light).setNormal(nx, ny, nz);
+        consumer.addVertex(pose, x3, y3, z3).setColor(r, g, b, 1.0f).setUv(u1, v1).setOverlay(overlay).setLight(light).setNormal(nx, ny, nz);
+        consumer.addVertex(pose, x4, y4, z4).setColor(r, g, b, 1.0f).setUv(u0, v1).setOverlay(overlay).setLight(light).setNormal(nx, ny, nz);
+
+        // Back Face (Normal -N)
+        consumer.addVertex(pose, x4, y4, z4).setColor(r, g, b, 1.0f).setUv(u0, v1).setOverlay(overlay).setLight(light).setNormal(-nx, -ny, -nz);
+        consumer.addVertex(pose, x3, y3, z3).setColor(r, g, b, 1.0f).setUv(u1, v1).setOverlay(overlay).setLight(light).setNormal(-nx, -ny, -nz);
+        consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, 1.0f).setUv(u1, v0).setOverlay(overlay).setLight(light).setNormal(-nx, -ny, -nz);
+        consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, 1.0f).setUv(u0, v0).setOverlay(overlay).setLight(light).setNormal(-nx, -ny, -nz);
     }
 
     @Override

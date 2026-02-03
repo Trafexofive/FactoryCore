@@ -1,6 +1,7 @@
 package com.example.factorycore.power;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -11,6 +12,7 @@ import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 
+import java.util.*;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,9 +79,15 @@ public class FactoryNetworkManager extends SavedData {
     }
 
     public ElectricalNetwork getNetworkAt(BlockPos pos) {
-        if (!nodeToNetworkId.containsKey(pos))
+        Integer id = nodeToNetworkId.get(pos);
+        if (id == null) return null;
+        ElectricalNetwork net = networks.get(id);
+        if (net == null) {
+            // Cleanup stale lookup
+            nodeToNetworkId.remove(pos);
             return null;
-        return networks.get(nodeToNetworkId.get(pos));
+        }
+        return net;
     }
 
     /**
@@ -94,11 +102,22 @@ public class FactoryNetworkManager extends SavedData {
      * - Old IDs are invalidated and redirected to the new master ID.
      */
     public void addNode(BlockPos pos) {
-        if (nodeToNetworkId.containsKey(pos))
-            return; // Already exists
+        addNode(pos, -1);
+    }
 
-        // Check 6 neighbors
-        ElectricalNetwork foundNet = null;
+    public void addNode(BlockPos pos, int forceId) {
+        if (nodeToNetworkId.containsKey(pos)) {
+            // Already exists, but if forced ID is different, we might need a merge or move
+            if (forceId != -1 && nodeToNetworkId.get(pos) != forceId) {
+                ElectricalNetwork master = getNetwork(forceId);
+                ElectricalNetwork victim = getNetwork(nodeToNetworkId.get(pos));
+                if (master != null && victim != null) mergeNetworks(master, victim);
+            }
+            return;
+        }
+
+        // Check neighbors
+        ElectricalNetwork foundNet = forceId != -1 ? getNetwork(forceId) : null;
 
         // Simple adjacency check
         BlockPos[] neighbors = { pos.above(), pos.below(), pos.north(), pos.south(), pos.east(), pos.west() };
@@ -114,16 +133,24 @@ public class FactoryNetworkManager extends SavedData {
                 } else if (foundNet.getId() != neighborNet.getId()) {
                     // Critical: Two different networks touched. Merge required.
                     mergeNetworks(foundNet, neighborNet);
+                    // Master might have changed after merge
+                    foundNet = getNetworkAt(pos);
                 }
             }
         }
 
         if (foundNet == null) {
-            // Isolated block -> Create new network root
-            ElectricalNetwork newNet = new ElectricalNetwork(nextId++);
-            networks.put(newNet.getId(), newNet);
-            newNet.addNode(pos);
-            nodeToNetworkId.put(pos, newNet.getId());
+            if (forceId != -1 && getNetwork(forceId) != null) {
+                foundNet = getNetwork(forceId);
+                foundNet.addNode(pos);
+                nodeToNetworkId.put(pos, foundNet.getId());
+            } else {
+                // Isolated block -> Create new network root
+                ElectricalNetwork newNet = new ElectricalNetwork(nextId++);
+                networks.put(newNet.getId(), newNet);
+                newNet.addNode(pos);
+                nodeToNetworkId.put(pos, newNet.getId());
+            }
         }
 
         setDirty();
@@ -135,17 +162,51 @@ public class FactoryNetworkManager extends SavedData {
             net.removeNode(pos);
             nodeToNetworkId.remove(pos);
 
-            // Garbage Collection: If network is empty, delete it to free ID/memory
-            if (net.getMembers().isEmpty()) {
+            // FACTORIO QOL: Network Partitioning
+            // If we remove a node, the network might be split into two or more parts.
+            // We must perform a flood-fill from each neighbor to check connectivity.
+            Set<BlockPos> members = new HashSet<>(net.getMembers());
+            if (!members.isEmpty()) {
+                // 1. Clear current network assignments for all members
+                for (BlockPos p : members) nodeToNetworkId.remove(p);
                 networks.remove(net.getId());
+
+                // 2. Re-discover networks from remaining members
+                for (BlockPos p : members) {
+                    if (!nodeToNetworkId.containsKey(p)) {
+                        // Found a part that hasn't been re-assigned yet
+                        int newId = nextId++;
+                        ElectricalNetwork newNet = new ElectricalNetwork(newId);
+                        networks.put(newId, newNet);
+                        
+                        // Flood-fill to find all connected members
+                        floodFillAssign(p, members, newNet);
+                    }
+                }
             }
 
-            // NOTE: We do NOT currently handle network splitting (graph partition).
-            // If a floor line is cut in the middle, both halves remain on the same Network
-            // ID
-            // effectively creating a "wireless" bridge between the disconnected parts.
-            // This is a trade-off for performance (O(1) removal vs O(N) graph traversal).
             setDirty();
+        }
+    }
+
+    private void floodFillAssign(BlockPos start, Set<BlockPos> pool, ElectricalNetwork network) {
+        Queue<BlockPos> queue = new ArrayDeque<>();
+        queue.add(start);
+        
+        while (!queue.isEmpty()) {
+            BlockPos current = queue.poll();
+            if (nodeToNetworkId.containsKey(current)) continue;
+
+            nodeToNetworkId.put(current, network.getId());
+            network.addNode(current);
+
+            // Check 6 neighbors
+            for (Direction dir : Direction.values()) {
+                BlockPos n = current.relative(dir);
+                if (pool.contains(n) && !nodeToNetworkId.containsKey(n)) {
+                    queue.add(n);
+                }
+            }
         }
     }
 

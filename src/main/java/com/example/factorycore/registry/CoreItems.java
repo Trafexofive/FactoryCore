@@ -32,11 +32,17 @@ public class CoreItems {
         public static final DeferredItem<Item> SOLAR_PANEL = ITEMS.register("solar_panel",
                         () -> new BlockItem(CoreBlocks.SOLAR_PANEL.get(), new Item.Properties()));
 
+        public static final DeferredItem<Item> PIPE = ITEMS.register("pipe",
+                        () -> new BlockItem(CoreBlocks.PIPE.get(), new Item.Properties()));
+
         public static final DeferredItem<Item> BATTERY = ITEMS.register("battery",
                         () -> new BlockItem(CoreBlocks.BATTERY.get(), new Item.Properties()));
 
         public static final DeferredItem<Item> MULTIMETER = ITEMS.register("multimeter",
-                        () -> new com.example.factorycore.item.MultimeterItem(new Item.Properties().stacksTo(1)));
+                        () -> new com.example.factorycore.item.MultimeterItem(new Item.Properties().stacksTo(64)));
+
+        public static final DeferredItem<Item> WRENCH = ITEMS.register("wrench",
+                        () -> new com.example.factorycore.item.WrenchItem(new Item.Properties().stacksTo(64)));
 
         public static void register(IEventBus eventBus) {
                 ITEMS.register(eventBus);

@@ -1,6 +1,7 @@
 package com.example.factorycore.block;
 
 import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
+import com.example.factorycore.power.FactoryNetworkManager;
 import com.example.factorycore.registry.CoreBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -80,7 +81,10 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new ElectricalPoleBlockEntity(pos, state);
+        if (state.getValue(PART) == PolePart.BOTTOM) {
+            return new ElectricalPoleBlockEntity(pos, state);
+        }
+        return null;
     }
 
     @Override
@@ -102,10 +106,51 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     }
 
     @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
+        if (!level.isClientSide && !state.is(oldState.getBlock())) {
+            if (state.getValue(PART) == PolePart.BOTTOM) {
+                FactoryNetworkManager manager = FactoryNetworkManager.get(level);
+                if (manager != null) {
+                    manager.addNode(pos);
+                    manager.setDirty();
+                }
+            }
+        }
+        super.onPlace(state, level, pos, oldState, isMoving);
+    }
+
+    @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer,
             ItemStack stack) {
-        level.setBlock(pos.above(), this.defaultBlockState().setValue(PART, PolePart.MIDDLE), 3);
-        level.setBlock(pos.above(2), this.defaultBlockState().setValue(PART, PolePart.TOP), 3);
+        if (level.isClientSide) return;
+        
+        if (state.getValue(PART) == PolePart.BOTTOM) {
+            if (placer instanceof Player) {
+                // MANUAL PLACEMENT: Player is here, place the full structure instantly.
+                BlockPos middle = pos.above();
+                BlockPos top = pos.above(2);
+                if (level.getBlockState(middle).isAir() || level.getBlockState(middle).canBeReplaced()) {
+                    level.setBlock(middle, state.setValue(PART, PolePart.MIDDLE), 3);
+                }
+                if (level.getBlockState(top).isAir() || level.getBlockState(top).canBeReplaced()) {
+                    level.setBlock(top, state.setValue(PART, PolePart.TOP), 3);
+                }
+            } else {
+                // SWARM/BLUEPRINT: Order drones to build it part-by-part.
+                BlockPos middle = pos.above();
+                if (level.getBlockState(middle).isAir()) {
+                    com.example.ghostlib.util.GhostJobManager.get(level).registerJob(middle, 
+                        com.example.ghostlib.block.entity.GhostBlockEntity.GhostState.UNASSIGNED, 
+                        state.setValue(PART, PolePart.MIDDLE));
+                }
+                BlockPos top = pos.above(2);
+                if (level.getBlockState(top).isAir()) {
+                    com.example.ghostlib.util.GhostJobManager.get(level).registerJob(top, 
+                        com.example.ghostlib.block.entity.GhostBlockEntity.GhostState.UNASSIGNED, 
+                        state.setValue(PART, PolePart.TOP));
+                }
+            }
+        }
     }
 
     @Override
@@ -113,20 +158,28 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
             BlockPos pos, BlockPos neighborPos) {
         PolePart part = state.getValue(PART);
         if (direction.getAxis() == Direction.Axis.Y) {
+            // If the neighbor part we depend on is AIR, we break too.
+            if (part == PolePart.MIDDLE) {
+                if (direction == Direction.DOWN && neighborState.isAir()) return Blocks.AIR.defaultBlockState();
+                if (direction == Direction.UP && neighborState.isAir()) return Blocks.AIR.defaultBlockState();
+            }
+            if (part == PolePart.TOP && direction == Direction.DOWN && neighborState.isAir()) {
+                return Blocks.AIR.defaultBlockState();
+            }
+
+            // Standard connection logic
             if (part == PolePart.BOTTOM && direction == Direction.UP) {
-                if (!neighborState.is(this) || neighborState.getValue(PART) != PolePart.MIDDLE)
+                if (!neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
                     return Blocks.AIR.defaultBlockState();
             }
             if (part == PolePart.MIDDLE) {
-                if (direction == Direction.UP
-                        && (!neighborState.is(this) || neighborState.getValue(PART) != PolePart.TOP))
+                if (direction == Direction.UP && !neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
                     return Blocks.AIR.defaultBlockState();
-                if (direction == Direction.DOWN
-                        && (!neighborState.is(this) || neighborState.getValue(PART) != PolePart.BOTTOM))
+                if (direction == Direction.DOWN && !neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
                     return Blocks.AIR.defaultBlockState();
             }
             if (part == PolePart.TOP && direction == Direction.DOWN) {
-                if (!neighborState.is(this) || neighborState.getValue(PART) != PolePart.MIDDLE)
+                if (!neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
                     return Blocks.AIR.defaultBlockState();
             }
         }
@@ -138,6 +191,11 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
         if (!state.is(newState.getBlock())) {
             // Only disconnect if BOTTOM
             if (state.getValue(PART) == PolePart.BOTTOM) {
+                if (!level.isClientSide) {
+                    FactoryNetworkManager manager = FactoryNetworkManager.get(level);
+                    if (manager != null) manager.removeNode(pos);
+                }
+                
                 BlockEntity be = level.getBlockEntity(pos);
                 if (be instanceof ElectricalPoleBlockEntity pole) {
                     pole.disconnectAll();

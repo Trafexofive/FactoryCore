@@ -38,15 +38,28 @@ public class CoreBlocks {
         public static final DeferredBlock<Block> ELECTRICAL_POLE = BLOCKS.register("electrical_pole",
                         () -> new com.example.factorycore.block.ElectricalPoleBlock());
 
-        public static final DeferredBlock<Block> SOLAR_PANEL = BLOCKS.register("solar_panel",
-                        () -> new com.example.factorycore.block.SolarPanelBlock(BlockBehaviour.Properties.of()
-                                        .mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL).noOcclusion()));
+                public static final DeferredBlock<Block> SOLAR_PANEL = BLOCKS.register("solar_panel",
+                                () -> new com.example.factorycore.block.SolarPanelBlock(BlockBehaviour.Properties.of()
+                                                .mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL).noOcclusion()));
+        
+                public static final DeferredBlock<Block> PIPE = BLOCKS.register("pipe",
+                                () -> new com.example.factorycore.block.PipeBlock());
+        
+                public static final DeferredBlock<Block> BATTERY = BLOCKS.register("battery",
+                                                () -> new com.example.factorycore.block.BatteryBlock(BlockBehaviour.Properties.of()
 
-        public static final DeferredBlock<Block> BATTERY = BLOCKS.register("battery",
-                        () -> new com.example.factorycore.block.BatteryBlock(BlockBehaviour.Properties.of()
-                                        .mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL)));
+                                                        .mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL)));
 
-        public static void register(IEventBus eventBus) {
-                BLOCKS.register(eventBus);
-        }
-}
+                
+
+                        public static void register(IEventBus eventBus) {
+
+                                BLOCKS.register(eventBus);
+
+                        }
+
+                }
+
+                
+
+        

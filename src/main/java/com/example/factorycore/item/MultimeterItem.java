@@ -104,6 +104,16 @@ public class MultimeterItem extends Item {
                         .append(formed
                                 ? Component.literal("✓ FORMED").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                                 : Component.literal("✗ INCOMPLETE").withStyle(ChatFormatting.RED)));
+                
+                if (formed) {
+                    // Show basic stats (can be expanded per BE)
+                    if (be instanceof com.example.factorycore.block.entity.ElectricFurnaceBlockEntity) {
+                        player.sendSystemMessage(Component.literal("  Consumption: ").withStyle(ChatFormatting.DARK_GRAY)
+                                .append(Component.literal("100 FE/t").withStyle(ChatFormatting.WHITE)));
+                        player.sendSystemMessage(Component.literal("  Speed: ").withStyle(ChatFormatting.DARK_GRAY)
+                                .append(Component.literal("1.0x").withStyle(ChatFormatting.WHITE)));
+                    }
+                }
             }
 
             // Electrical Pole Info
