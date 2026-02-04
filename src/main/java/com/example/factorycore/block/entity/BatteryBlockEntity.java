@@ -1,233 +1,50 @@
 package com.example.factorycore.block.entity;
 
+import com.lowdragmc.lowdraglib2.gui.factory.IContainerUIHolder;
+import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
+import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.example.factorycore.registry.CoreBlockEntities;
-import com.example.factorycore.util.MultiblockPattern;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.energy.EnergyStorage;
 
-public class BatteryBlockEntity extends AbstractFactoryMultiblockBlockEntity {
-
-    private final net.neoforged.neoforge.energy.EnergyStorage energy = new net.neoforged.neoforge.energy.EnergyStorage(5000000, 10000, 10000);
-
-
-
-    private static final MultiblockPattern PATTERN = createPattern();
-
-
-
-    private static MultiblockPattern createPattern() {
-
-        MultiblockPattern p = new MultiblockPattern(3, 3, 3);
-
-        for (int x = -1; x <= 1; x++) {
-
-            for (int y = 0; y <= 2; y++) {
-
-                for (int z = -1; z <= 1; z++) {
-
-                    if (x == 0 && y == 0 && z == 0) {
-
-                        p.add(x, y, z, com.example.factorycore.registry.CoreBlocks.BATTERY.get());
-
-                    } else if (x == 0 && y == 1 && z == 0) {
-
-                        p.add(x, y, z, (state) -> state.isAir());
-
-                    } else {
-
-                        p.add(x, y, z, com.example.factorycore.registry.CoreBlocks.MACHINE_CASING.get());
-
-                    }
-
-                }
-
-            }
-
-        }
-
-        return p;
-
-    }
-
-
+public class BatteryBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements IContainerUIHolder {
+    protected final EnergyStorage energyStorage;
 
     public BatteryBlockEntity(BlockPos pos, BlockState state) {
-
         super(CoreBlockEntities.BATTERY.get(), pos, state);
-
+        // Explicitly set capacity, maxReceive, and maxExtract to 1M
+        this.energyStorage = new EnergyStorage(1000000, 1000000, 1000000); 
     }
 
-
-
     @Override
-
-    public MultiblockPattern getPattern() {
-
-        return PATTERN;
-
+    public ModularUI createUI(Player player) {
+        return ModularUI.of(UI.empty(), player);
     }
 
-
-
     @Override
-
-    protected int getInventorySize() {
-
-        return 0; // Purely energy storage
-
+    public boolean isStillValid(Player player) {
+        return true;
     }
 
-
-
-            @Override
-
-
-
-            protected void serverTick() {
-
-
-
-                IEnergyStorage network = getFloorEnergy();
-
-
-
-                if (network != null) {
-
-
-
-                    // STANDALONE / SMALL BUFFER: 1000 FE/t
-
-
-
-                    // LARGE BUFFER: 50000 FE/t (Multiblock)
-
-
-
-                    int throughput = isFormed ? 50000 : 1000;
-
-
-
-        
-
-
-
-                    // Always try to balance: provide to empty network, pull from full network
-
-
-
-                    int myEnergy = energy.getEnergyStored();
-
-
-
-                    int netEnergy = network.getEnergyStored();
-
-
-
-                    int netMax = network.getMaxEnergyStored();
-
-
-
-        
-
-
-
-                    // Provide power if we have it and network isn't full
-
-
-
-                    if (myEnergy > 0 && netEnergy < netMax) {
-
-
-
-                        int toPush = energy.extractEnergy(throughput, true);
-
-
-
-                        int accepted = network.receiveEnergy(toPush, false);
-
-
-
-                        energy.extractEnergy(accepted, false);
-
-
-
-                    }
-
-
-
-        
-
-
-
-                    // Pull power if we have space and network isn't empty
-
-
-
-                    if (myEnergy < energy.getMaxEnergyStored() && netEnergy > 0) {
-
-
-
-                        int toPull = network.extractEnergy(throughput, true);
-
-
-
-                        int received = energy.receiveEnergy(toPull, false);
-
-
-
-                        network.extractEnergy(received, false);
-
-
-
-                    }
-
-
-
-                }
-
-
-
-            }
-
-
-
-        
-
-
-
-    
-
-
+    public EnergyStorage getEnergyStorage() {
+        return energyStorage;
+    }
 
     @Override
-
-    protected void saveAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
-
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
-
-        tag.putInt("BatteryEnergy", energy.getEnergyStored());
-
+        tag.putInt("Energy", energyStorage.getEnergyStored());
     }
-
-
 
     @Override
-
-    protected void loadAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
-
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
-
-        energy.receiveEnergy(tag.getInt("BatteryEnergy"), false);
-
+        if (tag.contains("Energy")) {
+            energyStorage.receiveEnergy(tag.getInt("Energy"), false);
+        }
     }
-
-    
-
-    public net.neoforged.neoforge.energy.IEnergyStorage getEnergyStorage() { return energy; }
-
 }
-
-

@@ -24,12 +24,6 @@ public class ModEventSubscriber {
         com.example.factorycore.block.entity.CreativeEnergySourceBlockEntity.registerCapabilities(event);
         
         event.registerBlockEntity(
-            Capabilities.EnergyStorage.BLOCK,
-            CoreBlockEntities.ELECTRICAL_POLE.get(),
-            (be, side) -> be.getEnergyStorage()
-        );
-
-        event.registerBlockEntity(
             Capabilities.ItemHandler.BLOCK,
             CoreBlockEntities.ELECTRIC_FURNACE.get(),
             (be, side) -> be.getItemHandler(side)

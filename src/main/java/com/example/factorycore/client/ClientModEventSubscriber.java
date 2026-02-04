@@ -1,7 +1,6 @@
 package com.example.factorycore.client;
 
 import com.example.factorycore.FactoryCore;
-import com.example.factorycore.client.gui.ElectricFurnaceScreen;
 import com.example.factorycore.registry.CoreMenus;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -10,20 +9,22 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 @EventBusSubscriber(modid = FactoryCore.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientModEventSubscriber {
-    @SubscribeEvent
-    public static void registerScreens(RegisterMenuScreensEvent event) {
-        event.register(CoreMenus.ELECTRIC_FURNACE.get(), ElectricFurnaceScreen::new);
-        event.register(CoreMenus.AUTO_ASSEMBLER.get(), com.example.factorycore.client.gui.AutoAssemblerScreen::new);
-    }
+        @SubscribeEvent
+        public static void registerScreens(RegisterMenuScreensEvent event) {
 
-    @SubscribeEvent
-    public static void registerRenderers(
-            net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
-        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.ELECTRICAL_POLE.get(),
-                com.example.factorycore.client.renderer.ElectricalPoleRenderer::new);
-        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.ELECTRIC_FURNACE.get(),
-                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
-        event.registerBlockEntityRenderer(com.example.factorycore.registry.CoreBlockEntities.AUTO_ASSEMBLER.get(),
-                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
-    }
+        }
+
+        @SubscribeEvent
+        public static void registerRenderers(
+                        net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
+                event.registerBlockEntityRenderer(
+                                com.example.factorycore.registry.CoreBlockEntities.ELECTRICAL_POLE.get(),
+                                com.example.factorycore.client.renderer.ElectricalPoleRenderer::new);
+                event.registerBlockEntityRenderer(
+                                com.example.factorycore.registry.CoreBlockEntities.ELECTRIC_FURNACE.get(),
+                                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
+                event.registerBlockEntityRenderer(
+                                com.example.factorycore.registry.CoreBlockEntities.AUTO_ASSEMBLER.get(),
+                                com.example.factorycore.client.renderer.FactoryMultiblockRenderer::new);
+        }
 }

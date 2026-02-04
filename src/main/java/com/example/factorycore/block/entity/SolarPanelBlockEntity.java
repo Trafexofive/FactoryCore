@@ -26,19 +26,20 @@ public class SolarPanelBlockEntity extends BlockEntity {
         // Generation logic
         if (level.isDay() && !level.isRaining()) {
             if (level.canSeeSkyFromBelowWater(pos.above())) {
-                be.energyStorage.generate(16); // Direct generation
+                be.energyStorage.generate(100); // Increased generation
             }
         }
 
         // Push logic - Push DOWN
         if (be.energyStorage.getEnergyStored() > 0) {
             IEnergyStorage target = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos.below(), Direction.UP);
-            if (target != null && target.canReceive()) {
-                int toPush = be.energyStorage.extractEnergy(1000, true); // Simulate
-                int accepted = target.receiveEnergy(toPush, false); // Actual push
-                be.energyStorage.extractEnergy(accepted, false); // Actual extract
-                if (accepted > 0)
+            if (target != null) {
+                int toPush = be.energyStorage.extractEnergy(1000, true); 
+                int accepted = target.receiveEnergy(toPush, false); 
+                be.energyStorage.extractEnergy(accepted, false);
+                if (accepted > 0) {
                     be.setChanged();
+                }
             }
         }
     }

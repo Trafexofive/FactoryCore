@@ -13,6 +13,13 @@ group = project.mod_group_id
 
 repositories {
     mavenLocal()
+    maven {
+        name "FirstDarkDev"
+        url "https://maven.firstdarkdev.xyz/snapshots"
+    }
+    flatDir {
+        dirs '../mods'
+    }
 }
 
 base {
@@ -82,7 +89,8 @@ tasks.named('processResources', ProcessResources).configure {
 
 dependencies {
 
-    implementation 'com.example:ghostlib:1.0.1' 
+    implementation 'com.example:ghostlib:1.0.1'
+    implementation files('../mods/ldlib2-neoforge-1.21.1-2.1.9-all.jar')
 
 }
 

@@ -1,44 +1,51 @@
 package com.example.factorycore.block;
 
 import com.example.factorycore.block.entity.BatteryBlockEntity;
-import com.example.factorycore.registry.CoreBlockEntities;
+import com.lowdragmc.lowdraglib2.gui.factory.LDMenuTypes;
+import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BaseEntityBlock;
-import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityTicker;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.phys.BlockHitResult;
 
-public class BatteryBlock extends BaseEntityBlock {
-    public static final com.mojang.serialization.MapCodec<BatteryBlock> CODEC = simpleCodec(BatteryBlock::new);
+public class BatteryBlock extends Block implements EntityBlock {
 
     public BatteryBlock(Properties properties) {
         super(properties);
     }
 
     @Override
-    protected com.mojang.serialization.MapCodec<? extends BaseEntityBlock> codec() {
-        return CODEC;
-    }
-
-    @Override
-    public RenderShape getRenderShape(BlockState state) {
-        return RenderShape.MODEL;
-    }
-
-    @Nullable
-    @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new BatteryBlockEntity(pos, state);
     }
 
-    @Nullable
     @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
-            BlockEntityType<T> type) {
-        return createTickerHelper(type, CoreBlockEntities.BATTERY.get(), BatteryBlockEntity::tick);
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+        if (!level.isClientSide) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof BatteryBlockEntity battery) {
+                player.openMenu(new MenuProvider() {
+                    @Override
+                    public Component getDisplayName() {
+                        return Component.literal("Battery");
+                    }
+
+                    @Override
+                    public AbstractContainerMenu createMenu(int windowId, Inventory playerInventory, Player player) {
+                        return new ModularUIContainerMenu(LDMenuTypes.BLOCK_UI.get(), windowId, playerInventory, battery);
+                    }
+                }, buffer -> buffer.writeBlockPos(pos));
+            }
+        }
+        return InteractionResult.SUCCESS;
     }
 }
