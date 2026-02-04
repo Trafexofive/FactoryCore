@@ -1,33 +1,34 @@
 package com.example.factorycore.block.entity;
 
-import com.lowdragmc.lowdraglib2.gui.factory.IContainerUIHolder;
+import com.example.factorycore.registry.CoreBlockEntities;
+import com.example.factorycore.ui.FactoryUI;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
-import com.example.factorycore.registry.CoreBlockEntities;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.ProgressBar;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
 
-public class BatteryBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements IContainerUIHolder {
+public class BatteryBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUI {
     protected final EnergyStorage energyStorage;
 
     public BatteryBlockEntity(BlockPos pos, BlockState state) {
         super(CoreBlockEntities.BATTERY.get(), pos, state);
-        // Explicitly set capacity, maxReceive, and maxExtract to 1M
         this.energyStorage = new EnergyStorage(1000000, 1000000, 1000000); 
     }
 
     @Override
-    public ModularUI createUI(Player player) {
-        return ModularUI.of(UI.empty(), player);
-    }
-
-    @Override
-    public boolean isStillValid(Player player) {
-        return true;
+    public ModularUI createUI(com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUIHolder holder) {
+        UI ui = UI.empty();
+        ui.getRootElement().addChild(new Label().setValue(net.minecraft.network.chat.Component.literal("Battery")).layout(l -> FactoryUI.margin(l, 5f, 0f, 5f, 0f)));
+        
+        ui.getRootElement().addChild(new ProgressBar().bindDataSource(FactoryUI.supplier(() -> (float) energyStorage.getEnergyStored() / energyStorage.getMaxEnergyStored()))
+                .layout(l -> FactoryUI.apply(l, 83f, 20f, 10f, 50f)));
+        
+        return ModularUI.of(ui, holder.player);
     }
 
     public EnergyStorage getEnergyStorage() {

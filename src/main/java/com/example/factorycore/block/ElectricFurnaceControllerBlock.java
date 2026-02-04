@@ -29,23 +29,13 @@ public class ElectricFurnaceControllerBlock extends Block implements EntityBlock
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-        if (!level.isClientSide) {
+    protected net.minecraft.world.InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+        if (!level.isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof ElectricFurnaceBlockEntity furnace && furnace.isFormed()) {
-                player.openMenu(new MenuProvider() {
-                    @Override
-                    public Component getDisplayName() {
-                        return Component.literal("Electric Furnace");
-                    }
-
-                    @Override
-                    public AbstractContainerMenu createMenu(int windowId, Inventory playerInventory, Player player) {
-                        return new ModularUIContainerMenu(LDMenuTypes.BLOCK_UI.get(), windowId, playerInventory, furnace);
-                    }
-                }, buffer -> buffer.writeBlockPos(pos));
+            if (be instanceof com.example.factorycore.block.entity.ElectricFurnaceBlockEntity furnace && furnace.isFormed()) {
+                com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.openUI(serverPlayer, pos);
             }
         }
-        return InteractionResult.SUCCESS;
+        return net.minecraft.world.InteractionResult.SUCCESS;
     }
 }

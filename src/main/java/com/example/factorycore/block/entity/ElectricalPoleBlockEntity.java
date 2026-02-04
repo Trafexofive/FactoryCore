@@ -19,7 +19,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private final Set<BlockPos> connections = new HashSet<>();
     private BlockPos connectedFloor = null;
     private boolean initialized = false;
-    private static final double MAX_RANGE_SQR = 18.0; // Lenient 4 blocks inclusive
+    private static final double MAX_RANGE_SQR = 36.0; // Increased to 6 blocks inclusive
 
     public ElectricalPoleBlockEntity(BlockPos pos, BlockState blockState) {
         super(CoreBlockEntities.ELECTRICAL_POLE.get(), pos, blockState);
@@ -42,14 +42,18 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         return net != null ? net.getStorage() : null;
     }
 
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && !level.isClientSide) {
+            autoConnect();
+            checkNetworkMerge();
+            initialized = true;
+        }
+    }
+
     public static void tick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
-        
-        if (!be.initialized) {
-            be.autoConnect();
-            be.checkNetworkMerge(); // Force immediate merge on place
-            be.initialized = true;
-        }
         
         if (level.getGameTime() % 10 == 0) { // Faster sync (0.5s)
             be.validateConnections();
