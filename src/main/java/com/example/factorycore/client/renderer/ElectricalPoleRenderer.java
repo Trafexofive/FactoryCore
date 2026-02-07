@@ -1,6 +1,7 @@
 package com.example.factorycore.client.renderer;
 
 import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
+import com.example.factorycore.block.ElectricalPoleBlock;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -45,18 +47,29 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
 
         // 2. Render ALL connections
         for (BlockPos target : be.getConnections()) {
+            BlockState targetState = be.getLevel().getBlockState(target);
+            
+            // ROBUST POLE CHECK
+            boolean isPoleAtTarget = targetState.getBlock() instanceof ElectricalPoleBlock;
+            if (!isPoleAtTarget && targetState.isAir()) {
+                // If it's Air (unloaded on client), but in our connections list, 
+                // and it's at roughly the same height, it's almost certainly a pole.
+                if (Math.abs(target.getY() - origin.getY()) < 2) {
+                    isPoleAtTarget = true;
+                }
+            }
+
+            // Prevent double-drawing between two poles (Low ID draws, High ID skips)
+            if (isPoleAtTarget && origin.asLong() > target.asLong()) continue;
+
             double dx = target.getX() - origin.getX();
             double dy = target.getY() - origin.getY();
             double dz = target.getZ() - origin.getZ();
 
-            // Simple logic: If it's a pole block at that position, connect to its top (2.8).
-            // Otherwise (Machine), connect to its center (0.5).
-            boolean isPoleAtTarget = be.getLevel().getBlockState(target).getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock;
+            // Height Logic: 2.8 for poles, 0.5 for machines
+            double targetHeight = isPoleAtTarget ? 2.8 : 0.5;
+            Vec3 end = new Vec3(dx + 0.5, dy + targetHeight, dz + 0.5);
             
-            // Avoid double-drawing if both are poles
-            if (isPoleAtTarget && origin.asLong() > target.asLong()) continue;
-
-            Vec3 end = new Vec3(dx + 0.5, dy + (isPoleAtTarget ? 2.8 : 0.5), dz + 0.5);
             drawCatenary(consumer, pose, start, end, 0.07f, packedLight, packedOverlay, sprite);
         }
 
