@@ -28,7 +28,6 @@ public class CoreCreativeTabs {
                         output.accept(CoreItems.SOLAR_PANEL.get());
                         output.accept(CoreItems.PIPE.get());
                         output.accept(CoreItems.WRENCH.get());
-                        output.accept(CoreItems.MULTIMETER.get());
                     })
                     .build());
 

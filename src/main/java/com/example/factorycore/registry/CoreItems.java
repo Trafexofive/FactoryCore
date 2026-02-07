@@ -38,9 +38,6 @@ public class CoreItems {
         public static final DeferredItem<Item> BATTERY = ITEMS.register("battery",
                         () -> new BlockItem(CoreBlocks.BATTERY.get(), new Item.Properties()));
 
-        public static final DeferredItem<Item> MULTIMETER = ITEMS.register("multimeter",
-                        () -> new com.example.factorycore.item.MultimeterItem(new Item.Properties().stacksTo(64)));
-
         public static final DeferredItem<Item> WRENCH = ITEMS.register("wrench",
                         () -> new com.example.factorycore.item.WrenchItem(new Item.Properties().stacksTo(64)));
 

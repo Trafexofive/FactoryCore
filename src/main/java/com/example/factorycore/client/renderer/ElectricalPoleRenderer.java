@@ -59,28 +59,33 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
             drawCatenary(consumer, pose, start, floorEnd, 0.07f, packedLight, packedOverlay, sprite);
         }
 
-        // 2. Render Cables to other Poles
+        // 2. Render Cables to other Poles or Machines
         for (BlockPos target : be.getConnections()) {
-            // Draw if Origin Long ID < Target Long ID to avoid double-drawing
-            if (origin.asLong() < target.asLong()) {
-                
-                // Match MAX_RANGE_SQR (16.1)
-                double distSqr = origin.distSqr(target);
-                if (distSqr > 16.1) continue; 
+            
+            // Match MAX_RANGE_SQR (36.0)
+            double distSqr = origin.distSqr(target);
+            if (distSqr > 36.0) continue; 
 
-                if (be.getLevel().getBlockEntity(target) instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity) {
-                    
-                    double dx = target.getX() - origin.getX();
-                    double dy = target.getY() - origin.getY();
-                    double dz = target.getZ() - origin.getZ();
+            boolean isPole = be.getLevel().getBlockEntity(target) instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
 
-                    // Target connection point
-                    Vec3 end = new Vec3(dx + 0.5, dy + 2.8, dz + 0.5);
+            // Prevent double-drawing between two poles (draw only if origin ID < target ID)
+            if (isPole && origin.asLong() >= target.asLong()) continue;
 
-                    // Draw Catenary Curve (Drooping Wire)
-                    drawCatenary(consumer, pose, start, end, 0.07f, packedLight, packedOverlay, sprite);
-                }
+            double dx = target.getX() - origin.getX();
+            double dy = target.getY() - origin.getY();
+            double dz = target.getZ() - origin.getZ();
+
+            Vec3 end;
+            if (isPole) {
+                // Pole-to-Pole: Connect to top (2.8)
+                end = new Vec3(dx + 0.5, dy + 2.8, dz + 0.5);
+            } else {
+                // Pole-to-Machine: Connect to center (0.5)
+                end = new Vec3(dx + 0.5, dy + 0.5, dz + 0.5);
             }
+
+            // Draw Catenary Curve (Drooping Wire)
+            drawCatenary(consumer, pose, start, end, 0.07f, packedLight, packedOverlay, sprite);
         }
 
         poseStack.popPose();

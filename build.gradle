@@ -4,7 +4,7 @@ plugins {
     id 'net.neoforged.moddev' version '1.0.18'
 }
 
-tasks.named('wrapper', Wrapper).configure {
+tasks.withType(Wrapper).configureEach {
     distributionType = Wrapper.DistributionType.BIN
 }
 

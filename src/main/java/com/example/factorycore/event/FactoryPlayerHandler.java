@@ -40,7 +40,6 @@ public class FactoryPlayerHandler {
             player.getInventory().add(new ItemStack(CoreItems.SOLAR_PANEL.get(), 64));
             player.getInventory().add(new ItemStack(CoreItems.PIPE.get(), 64));
             player.getInventory().add(new ItemStack(CoreItems.WRENCH.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.MULTIMETER.get(), 64));
             
             // Starter Blueprints
             player.getInventory().add(createBlueprint("Electric Furnace", createFurnacePattern()));

@@ -55,9 +55,115 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public static void tick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
         
-        if (level.getGameTime() % 10 == 0) { // Faster sync (0.5s)
+        if (level.getGameTime() % 10 == 0) { // Fast sync
             be.validateConnections();
             be.checkNetworkMerge();
+        }
+        
+        if (level.getGameTime() % 20 == 0) { // Slow sync (1s)
+            be.maintainMachineConnections();
+        }
+
+        be.distributeEnergy();
+    }
+
+    private void distributeEnergy() {
+        FactoryNetworkManager manager = FactoryNetworkManager.get(level);
+        if (manager == null) return;
+        ElectricalNetwork network = manager.getNetworkAt(worldPosition);
+        if (network == null || network.getStorage().getEnergyStored() <= 0) return;
+
+        net.neoforged.neoforge.energy.IEnergyStorage source = network.getStorage();
+        int maxExtract = 10000; // Limit extraction rate per tick per connection
+
+        for (BlockPos target : connections) {
+            // Skip other poles (they share the network buffer via manager logic or are just bridges)
+            if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
+
+            // Push to machine
+            net.neoforged.neoforge.energy.IEnergyStorage dest = level.getCapability(
+                net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                target, 
+                null // Null side for general access, or maybe iterate sides?
+            );
+            
+            // Fallback: Try specific faces if null (some machines are strict)
+            if (dest == null) {
+                for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                    dest = level.getCapability(
+                        net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                        target, 
+                        dir
+                    );
+                    if (dest != null) break;
+                }
+            }
+
+            if (dest != null && dest.canReceive()) {
+                int simulatedExtract = source.extractEnergy(maxExtract, true);
+                int accepted = dest.receiveEnergy(simulatedExtract, false);
+                if (accepted > 0) {
+                    source.extractEnergy(accepted, false);
+                }
+            }
+        }
+    }
+
+    private void maintainMachineConnections() {
+        // 1. Scan for machines in range
+        BlockPos.betweenClosedStream(worldPosition.offset(-4, -4, -4), worldPosition.offset(4, 4, 4)).forEach(p -> {
+            if (p.equals(worldPosition)) return;
+            // Check distance
+            if (p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
+
+            // Check if it's a machine (has energy, not a pole)
+            if (!(level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) && hasEnergyCapability(p)) {
+                // It's a machine. Check if we should be the one connecting.
+                BlockPos target = p.immutable();
+                handleMachineConnection(target);
+            }
+        });
+    }
+
+    private void handleMachineConnection(BlockPos machinePos) {
+        // Find ALL poles connected to this machine (or close enough to connect)
+        // This is expensive to scan globally, so we scan local area of the machine.
+        
+        BlockPos closestPole = null;
+        double minDst = Double.MAX_VALUE;
+
+        // Scan around the MACHINE to find nearby poles
+        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-4, -4, -4), machinePos.offset(4, 4, 4))) {
+            if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
+                double dst = p.distSqr(machinePos);
+                if (dst <= MAX_RANGE_SQR) {
+                    if (dst < minDst) {
+                        minDst = dst;
+                        closestPole = p;
+                    } else if (dst == minDst && p.equals(this.worldPosition)) {
+                        // Tie-breaker: prefer self if equal distance (stability)
+                        closestPole = this.worldPosition;
+                    }
+                }
+            }
+        }
+
+        if (closestPole != null) {
+            if (closestPole.equals(this.worldPosition)) {
+                // I am the closest! Connect if not already.
+                if (!connections.contains(machinePos)) {
+                    // Check if another pole is currently holding it (and steal it)
+                    // We rely on the *other* pole running this same logic and disconnecting itself.
+                    // But for immediate visual feedback, we can force disconnect neighbors? 
+                    // No, let's just connect. The other pole will disconnect next tick.
+                    connectOneWay(machinePos);
+                }
+            } else {
+                // I am NOT the closest. Disconnect if connected.
+                if (connections.contains(machinePos)) {
+                    removeConnection(machinePos);
+                }
+            }
         }
     }
     
