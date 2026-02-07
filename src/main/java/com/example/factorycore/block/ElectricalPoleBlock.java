@@ -3,6 +3,7 @@ package com.example.factorycore.block;
 import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
 import com.example.factorycore.power.FactoryNetworkManager;
 import com.example.factorycore.registry.CoreBlockEntities;
+import com.example.factorycore.util.FactoryLogger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.StringRepresentable;
@@ -82,6 +83,7 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         if (state.getValue(PART) == PolePart.BOTTOM) {
+            FactoryLogger.power("Creating ElectricalPoleBE at " + pos);
             return new ElectricalPoleBlockEntity(pos, state);
         }
         return null;
@@ -212,7 +214,13 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
         if (level.isClientSide)
             return null;
         if (state.getValue(PART) != PolePart.BOTTOM)
-            return null; // Only Bottom Ticks
-        return createTickerHelper(type, CoreBlockEntities.ELECTRICAL_POLE.get(), ElectricalPoleBlockEntity::tick);
+            return null;
+            
+        // Force ticker for debugging - direct lambda to bypass potential registration mismatches
+        return (lvl, p, s, be) -> {
+            if (be instanceof ElectricalPoleBlockEntity pole) {
+                ElectricalPoleBlockEntity.tick(lvl, p, s, pole);
+            }
+        };
     }
 }
