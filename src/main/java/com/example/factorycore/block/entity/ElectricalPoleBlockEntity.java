@@ -49,31 +49,40 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         
         long time = level.getGameTime();
         
-        // Faster responsiveness: 5 ticks (0.25s) for critical syncs
         if (time % 5 == 0) {
             be.validateConnections();
             be.checkNetworkMerge();
         }
 
-        // Machine discovery: 10 ticks (0.5s)
         if (time % 10 == 0) {
             be.maintainMachineConnections();
         }
 
-        be.distributeEnergy();
+        be.handleEnergyTransfer();
     }
 
-    private void distributeEnergy() {
-        IEnergyStorage source = getEnergyStorage();
-        if (source == null || source.getEnergyStored() <= 0) return;
+    private void handleEnergyTransfer() {
+        IEnergyStorage network = getEnergyStorage();
+        if (network == null) return;
 
         for (BlockPos target : connections) {
             if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
 
-            IEnergyStorage dest = getEnergyCapability(target);
-            if (dest != null && dest.canReceive()) {
-                int accepted = dest.receiveEnergy(Math.min(source.getEnergyStored(), 10000), false);
-                if (accepted > 0) source.extractEnergy(accepted, false);
+            IEnergyStorage machine = getEnergyCapability(target);
+            if (machine == null) continue;
+
+            // 1. DISCHARGE: Network -> Machine (Push)
+            if (machine.canReceive() && network.getEnergyStored() > 0) {
+                int toPush = network.extractEnergy(10000, true);
+                int pushed = machine.receiveEnergy(toPush, false);
+                if (pushed > 0) network.extractEnergy(pushed, false);
+            }
+
+            // 2. CHARGE: Machine -> Network (Pull)
+            if (machine.canExtract() && network.getEnergyStored() < network.getMaxEnergyStored()) {
+                int toPull = network.receiveEnergy(10000, true);
+                int pulled = machine.extractEnergy(toPull, false);
+                if (pulled > 0) network.receiveEnergy(pulled, false);
             }
         }
     }
