@@ -38,16 +38,33 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public void onLoad() {
         super.onLoad();
         if (level != null && !level.isClientSide) {
-            autoConnect();
-            checkNetworkMerge();
+            refresh();
         }
+    }
+
+    public void refresh() {
+        if (level == null || level.isClientSide) return;
+        autoConnect();
+        checkNetworkMerge();
+        maintainMachineConnections();
+        validateConnections();
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
         long time = level.getGameTime();
-        if (time % 5 == 0) { be.validateConnections(); be.checkNetworkMerge(); }
-        if (time % 20 == 0) be.maintainMachineConnections();
+        
+        // Critical Logic (Network & Validation)
+        if (time % 5 == 0) {
+            be.validateConnections();
+            be.checkNetworkMerge();
+        }
+
+        // Machine discovery
+        if (time % 20 == 0) {
+            be.maintainMachineConnections();
+        }
+
         be.handleEnergyTransfer();
     }
 
@@ -123,7 +140,12 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         Iterator<BlockPos> it = connections.iterator();
         while (it.hasNext()) {
             BlockPos target = it.next();
-            if (target.distSqr(worldPosition) > MAX_RANGE_SQR || level.getBlockState(target).isAir()) { it.remove(); changed = true; }
+            if (level.isLoaded(target)) {
+                if (target.distSqr(worldPosition) > MAX_RANGE_SQR || level.getBlockState(target).isAir()) {
+                    it.remove();
+                    changed = true;
+                }
+            }
         }
         if (changed) sync();
     }
