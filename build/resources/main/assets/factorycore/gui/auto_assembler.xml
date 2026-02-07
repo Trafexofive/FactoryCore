@@ -1,0 +1,33 @@
+<ldlib:ui xmlns:ldlib="com.lowdragmc.lowdraglib2.gui.ui">
+    <ldlib:WidgetGroup x="0" y="0" width="176" height="188" background="MCSprites.RECT">
+        <ldlib:Label id="title" text="Auto Assembler" x="5" y="5"/>
+        
+        <!-- 3x3 Crafting Grid -->
+        <ldlib:ItemSlot id="slot_0" x="30" y="17" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_1" x="48" y="17" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_2" x="66" y="17" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_3" x="30" y="35" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_4" x="48" y="35" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_5" x="66" y="35" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_6" x="30" y="53" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_7" x="48" y="53" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_8" x="66" y="53" width="18" height="18"/>
+        
+        <!-- Output Slots -->
+        <ldlib:ItemSlot id="slot_9" x="124" y="35" width="18" height="18"/>
+        <ldlib:ItemSlot id="slot_10" x="142" y="35" width="18" height="18"/>
+        
+        <!-- Control Buttons -->
+        <ldlib:Button id="lock_btn" text="Lock" x="90" y="17" width="30" height="18"/>
+        <ldlib:Button id="toggle_btn" text="Start" x="90" y="53" width="30" height="18"/>
+        
+        <!-- Status Labels -->
+        <ldlib:Label id="lock_status" text="Unlocked" x="124" y="17"/>
+        
+        <!-- Energy Bar -->
+        <ldlib:ProgressBar id="energy_bar" x="10" y="17" width="10" height="54"/>
+        
+        <!-- Player Inventory -->
+        <ldlib:InventorySlots x="8" y="106"/>
+    </ldlib:WidgetGroup>
+</ldlib:ui>

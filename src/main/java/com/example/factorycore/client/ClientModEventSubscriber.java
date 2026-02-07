@@ -11,7 +11,9 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 public class ClientModEventSubscriber {
         @SubscribeEvent
         public static void registerScreens(RegisterMenuScreensEvent event) {
-
+                event.register(CoreMenus.ELECTRIC_FURNACE_MENU.get(), ModularUIScreenProxy.create());
+                event.register(CoreMenus.AUTO_ASSEMBLER_MENU.get(), ModularUIScreenProxy.create());
+                event.register(CoreMenus.BATTERY_MENU.get(), ModularUIScreenProxy.create());
         }
 
         @SubscribeEvent

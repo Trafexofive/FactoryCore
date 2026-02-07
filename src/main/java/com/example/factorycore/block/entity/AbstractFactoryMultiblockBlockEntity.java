@@ -29,11 +29,25 @@ import java.util.Map;
  * Advanced base class for FactoryCore multiblocks.
  * Handles structure validation, automatic I/O port discovery, and provides transfer helpers.
  */
-public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity {
+public abstract class AbstractFactoryMultiblockBlockEntity extends BlockEntity implements com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUI, com.lowdragmc.lowdraglib2.gui.factory.IContainerUIHolder {
     protected boolean isFormed = false;
     protected int checkTimer = 0;
     protected Direction cachedFacing = Direction.NORTH;
     protected BlockPos connectedFloor = null;
+
+    @Override
+    public boolean isStillValid(net.minecraft.world.entity.player.Player player) {
+        return !isRemoved();
+    }
+
+    @Override
+    public com.lowdragmc.lowdraglib2.gui.ui.ModularUI createUI(com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUIHolder holder) {
+        return createUI(holder.player);
+    }
+
+    public abstract com.lowdragmc.lowdraglib2.gui.ui.ModularUI createUI(net.minecraft.world.entity.player.Player player);
+
+    public abstract net.minecraft.network.chat.Component getDisplayName();
 
     // --- Storage ---
     protected final ItemStackHandler inventory = createItemHandler();

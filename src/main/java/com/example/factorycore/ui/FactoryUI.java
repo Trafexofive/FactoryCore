@@ -22,6 +22,12 @@ public class FactoryUI {
             public T getValue() {
                 return supplier.get();
             }
+
+            public boolean isChanged(T lastValue) {
+                T newValue = getValue();
+                if (newValue == null) return lastValue != null;
+                return !newValue.equals(lastValue);
+            }
         };
     }
 
