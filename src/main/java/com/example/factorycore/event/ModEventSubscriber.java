@@ -80,6 +80,11 @@ public class ModEventSubscriber {
             (be, side) -> be.getEnergyStorage()
         );
         event.registerBlockEntity(
+            Capabilities.EnergyStorage.BLOCK,
+            CoreBlockEntities.ELECTRICAL_POLE.get(),
+            (be, side) -> be.getEnergyStorage()
+        );
+        event.registerBlockEntity(
             Capabilities.ItemHandler.BLOCK,
             CoreBlockEntities.PIPE.get(),
             (be, side) -> be.getInventory()
