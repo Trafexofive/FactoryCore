@@ -3,12 +3,9 @@ package com.example.factorycore.block.entity;
 import com.example.factorycore.power.ElectricalNetwork;
 import com.example.factorycore.power.FactoryNetworkManager;
 import com.example.factorycore.registry.CoreBlockEntities;
-import com.example.factorycore.util.FactoryLogger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtUtils;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,7 +37,9 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public void onLoad() {
         super.onLoad();
         if (level != null && !level.isClientSide) {
+            // Immediate initial setup
             autoConnect();
+            maintainMachineConnections();
             checkNetworkMerge();
         }
     }
@@ -49,14 +48,15 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (level.isClientSide) return;
         
         long time = level.getGameTime();
-        long offset = Math.abs(pos.asLong() % 20);
         
-        if ((time + offset) % 10 == 0) {
+        // Faster responsiveness: 5 ticks (0.25s) for critical syncs
+        if (time % 5 == 0) {
             be.validateConnections();
             be.checkNetworkMerge();
         }
 
-        if ((time + offset) % 20 == 0) {
+        // Machine discovery: 10 ticks (0.5s)
+        if (time % 10 == 0) {
             be.maintainMachineConnections();
         }
 
@@ -68,23 +68,19 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (source == null || source.getEnergyStored() <= 0) return;
 
         for (BlockPos target : connections) {
-            // Distribute only to machines (not other poles)
             if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
 
             IEnergyStorage dest = getEnergyCapability(target);
             if (dest != null && dest.canReceive()) {
-                int accepted = dest.receiveEnergy(Math.min(source.getEnergyStored(), 5000), false);
+                int accepted = dest.receiveEnergy(Math.min(source.getEnergyStored(), 10000), false);
                 if (accepted > 0) source.extractEnergy(accepted, false);
             }
         }
     }
 
     private void maintainMachineConnections() {
-        // Closest Pole wins for machines
         BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
-            
-            // If it's a machine (has energy cap, is not a pole)
             if (!(level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) && getEnergyCapability(p) != null) {
                 handleMachineConnection(p.immutable());
             }
@@ -95,7 +91,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         BlockPos closestPole = null;
         double minDst = Double.MAX_VALUE;
 
-        // Check poles within 6 blocks of the machine
+        // Find the absolute closest pole to this machine
         for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-6, -6, -6), machinePos.offset(6, 6, 6))) {
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
                 double dst = p.distSqr(machinePos);
@@ -135,7 +131,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         Iterator<BlockPos> it = connections.iterator();
         while (it.hasNext()) {
             BlockPos target = it.next();
-            // Range check or removal check
             if (target.distSqr(worldPosition) > MAX_RANGE_SQR || level.getBlockState(target).isAir()) {
                 it.remove();
                 changed = true;
@@ -145,7 +140,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
 
     public void autoConnect() {
-        // Poles connect to other poles to form backbone
         BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) connect(p.immutable());
@@ -191,7 +185,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
        BlockPos bestFloor = null;
        double minFloorDst = Double.MAX_VALUE;
 
-       // Scan for nearby network nodes (Poles or Floors) to bridge the network
+       // Bridge network to nearby Nodes
        for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6))) {
            if (p.equals(worldPosition)) continue;
            
