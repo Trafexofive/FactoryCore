@@ -7,7 +7,6 @@ import com.example.factorycore.util.FactoryLogger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
@@ -22,7 +21,7 @@ import java.util.Set;
 public class ElectricalPoleBlockEntity extends BlockEntity {
     private final Set<BlockPos> connections = new HashSet<>();
     private BlockPos connectedFloor = null;
-    private static final double MAX_RANGE_SQR = 36.1;
+    private static final double MAX_RANGE_SQR = 36.1; // 6 blocks inclusive
 
     public ElectricalPoleBlockEntity(BlockPos pos, BlockState blockState) {
         super(CoreBlockEntities.ELECTRICAL_POLE.get(), pos, blockState);
@@ -50,14 +49,17 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (level.isClientSide) return;
         
         long time = level.getGameTime();
-        // Validation & Machine discovery every 20 ticks (1s)
-        if (time % 20 == 0) {
+        long offset = Math.abs(pos.asLong() % 20);
+        
+        if ((time + offset) % 10 == 0) {
             be.validateConnections();
-            be.maintainMachineConnections();
             be.checkNetworkMerge();
         }
 
-        // Energy distribution every tick
+        if ((time + offset) % 20 == 0) {
+            be.maintainMachineConnections();
+        }
+
         be.distributeEnergy();
     }
 
@@ -66,35 +68,59 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (source == null || source.getEnergyStored() <= 0) return;
 
         for (BlockPos target : connections) {
-            // Machines only (other poles handled by network merge)
+            // Distribute only to machines (not other poles)
             if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
 
             IEnergyStorage dest = getEnergyCapability(target);
             if (dest != null && dest.canReceive()) {
-                int accepted = dest.receiveEnergy(Math.min(source.getEnergyStored(), 1000), false);
+                int accepted = dest.receiveEnergy(Math.min(source.getEnergyStored(), 5000), false);
                 if (accepted > 0) source.extractEnergy(accepted, false);
             }
         }
     }
 
     private void maintainMachineConnections() {
-        // Simple search: find closest machine within 6 blocks
+        // Closest Pole wins for machines
         BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
             
-            // If it's a machine (has energy cap and isn't a pole)
+            // If it's a machine (has energy cap, is not a pole)
             if (!(level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) && getEnergyCapability(p) != null) {
-                if (!connections.contains(p)) {
-                    connectOneWay(p.immutable());
-                    FactoryLogger.power("Pole at " + worldPosition + " auto-connected to machine at " + p);
-                }
+                handleMachineConnection(p.immutable());
             }
         });
     }
 
+    private void handleMachineConnection(BlockPos machinePos) {
+        BlockPos closestPole = null;
+        double minDst = Double.MAX_VALUE;
+
+        // Check poles within 6 blocks of the machine
+        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-6, -6, -6), machinePos.offset(6, 6, 6))) {
+            if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
+                double dst = p.distSqr(machinePos);
+                if (dst <= MAX_RANGE_SQR) {
+                    if (dst < minDst) {
+                        minDst = dst;
+                        closestPole = p.immutable();
+                    } else if (Math.abs(dst - minDst) < 0.001 && p.equals(this.worldPosition)) {
+                        closestPole = this.worldPosition;
+                    }
+                }
+            }
+        }
+
+        if (closestPole != null) {
+            if (closestPole.equals(this.worldPosition)) {
+                if (!connections.contains(machinePos)) connectOneWay(machinePos);
+            } else {
+                if (connections.contains(machinePos)) removeConnection(machinePos);
+            }
+        }
+    }
+
     private IEnergyStorage getEnergyCapability(BlockPos pos) {
         var cap = net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK;
-        // Try all sides + null
         IEnergyStorage s = level.getCapability(cap, pos, null);
         if (s != null) return s;
         for (Direction d : Direction.values()) {
@@ -109,6 +135,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         Iterator<BlockPos> it = connections.iterator();
         while (it.hasNext()) {
             BlockPos target = it.next();
+            // Range check or removal check
             if (target.distSqr(worldPosition) > MAX_RANGE_SQR || level.getBlockState(target).isAir()) {
                 it.remove();
                 changed = true;
@@ -118,6 +145,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
 
     public void autoConnect() {
+        // Poles connect to other poles to form backbone
         BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) connect(p.immutable());
@@ -160,25 +188,40 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
        if (myNet == null) { manager.addNode(worldPosition); myNet = manager.getNetworkAt(worldPosition); }
        if (myNet == null) return;
 
-       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-6, -2, -6), worldPosition.offset(6, 2, 6))) {
-           if (level.getBlockState(p).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get())) {
-               manager.addNode(p);
-               ElectricalNetwork floorNet = manager.getNetworkAt(p);
-               if (floorNet != null && floorNet.getId() != myNet.getId()) {
-                   manager.mergeNetworks(floorNet, myNet);
+       BlockPos bestFloor = null;
+       double minFloorDst = Double.MAX_VALUE;
+
+       // Scan for nearby network nodes (Poles or Floors) to bridge the network
+       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6))) {
+           if (p.equals(worldPosition)) continue;
+           
+           BlockState s = level.getBlockState(p);
+           boolean isFloor = s.is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get());
+           boolean isPole = s.getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock;
+           
+           if (isFloor || isPole) {
+               ElectricalNetwork otherNet = manager.getNetworkAt(p);
+               if (otherNet != null && otherNet.getId() != myNet.getId()) {
+                   manager.mergeNetworks(myNet, otherNet);
                    myNet = manager.getNetworkAt(worldPosition);
                }
-               if (!p.equals(connectedFloor)) { connectedFloor = p.immutable(); sync(); }
-               break;
+               
+               if (isFloor) {
+                   double d = p.distSqr(worldPosition);
+                   if (d < minFloorDst) {
+                       minFloorDst = d;
+                       bestFloor = p.immutable();
+                   }
+               }
            }
        }
-
-       for (BlockPos otherPos : connections) {
-           ElectricalNetwork otherNet = manager.getNetworkAt(otherPos);
-           if (otherNet != null && otherNet.getId() != myNet.getId()) {
-               manager.mergeNetworks(myNet, otherNet);
-               myNet = manager.getNetworkAt(worldPosition);
-           }
+       
+       if (bestFloor != null && !bestFloor.equals(connectedFloor)) {
+           connectedFloor = bestFloor;
+           sync();
+       } else if (bestFloor == null && connectedFloor != null) {
+           connectedFloor = null;
+           sync();
        }
     }
 
