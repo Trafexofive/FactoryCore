@@ -55,12 +55,16 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public static void tick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
         
-        if (level.getGameTime() % 10 == 0) { // Fast sync
+        // Staggered updates based on position to prevent lag spikes
+        long gameTime = level.getGameTime();
+        long offset = pos.asLong();
+        
+        if ((gameTime + offset) % 10 == 0) { // Fast sync (0.5s)
             be.validateConnections();
             be.checkNetworkMerge();
         }
         
-        if (level.getGameTime() % 20 == 0) { // Slow sync (1s)
+        if ((gameTime + offset) % 20 == 0) { // Slow sync (1s)
             be.maintainMachineConnections();
         }
 
@@ -77,19 +81,32 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         int maxExtract = 10000; // Limit extraction rate per tick per connection
 
         for (BlockPos target : connections) {
-            // Skip other poles (they share the network buffer via manager logic or are just bridges)
+            // Skip other poles
             if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
 
-            // Push to machine
+            // Determine best side to insert energy (Side facing the pole)
+            net.minecraft.core.Direction directionToPole = getDirectionTo(target, worldPosition);
+            
+            // Try specific side first
             net.neoforged.neoforge.energy.IEnergyStorage dest = level.getCapability(
                 net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
                 target, 
-                null // Null side for general access, or maybe iterate sides?
+                directionToPole
             );
             
-            // Fallback: Try specific faces if null (some machines are strict)
+            // Fallback: Try null side (internal/omnidirectional)
+            if (dest == null) {
+                dest = level.getCapability(
+                    net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                    target, 
+                    null
+                );
+            }
+            
+            // Fallback: Try all other sides
             if (dest == null) {
                 for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                    if (dir == directionToPole) continue;
                     dest = level.getCapability(
                         net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
                         target, 
@@ -106,6 +123,41 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
                     source.extractEnergy(accepted, false);
                 }
             }
+        }
+    }
+    
+    private net.minecraft.core.Direction getDirectionTo(BlockPos from, BlockPos to) {
+        return net.minecraft.core.Direction.getNearest(
+            to.getX() - from.getX(),
+            to.getY() - from.getY(),
+            to.getZ() - from.getZ()
+        );
+    }
+
+    private void validateConnections() {
+        boolean changed = false;
+        Iterator<BlockPos> it = connections.iterator();
+        while (it.hasNext()) {
+            BlockPos target = it.next();
+            if (target.distSqr(this.worldPosition) > MAX_RANGE_SQR || target.equals(this.worldPosition)) {
+                it.remove();
+                changed = true;
+                continue;
+            }
+            if (level.isLoaded(target)) {
+                boolean isPole = level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity;
+                boolean isMachine = !isPole && hasEnergyCapability(target);
+                
+                // Remove if it's neither a pole nor a machine we can power
+                if (!isPole && !isMachine) {
+                    it.remove();
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
 
@@ -164,27 +216,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
                     removeConnection(machinePos);
                 }
             }
-        }
-    }
-    
-    private void validateConnections() {
-        boolean changed = false;
-        Iterator<BlockPos> it = connections.iterator();
-        while (it.hasNext()) {
-            BlockPos target = it.next();
-            if (target.distSqr(this.worldPosition) > MAX_RANGE_SQR || target.equals(this.worldPosition)) {
-                it.remove();
-                changed = true;
-                continue;
-            }
-            if (level.isLoaded(target) && !(level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity)) {
-                it.remove();
-                changed = true;
-            }
-        }
-        if (changed) {
-            setChanged();
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
     
