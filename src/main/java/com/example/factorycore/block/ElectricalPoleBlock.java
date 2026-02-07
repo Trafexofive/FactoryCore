@@ -34,25 +34,14 @@ import org.jetbrains.annotations.Nullable;
 public class ElectricalPoleBlock extends BaseEntityBlock {
     public enum PolePart implements StringRepresentable {
         BOTTOM("bottom"), MIDDLE("middle"), TOP("top");
-
         private final String name;
-
-        PolePart(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String getSerializedName() {
-            return name;
-        }
+        PolePart(String name) { this.name = name; }
+        @Override public String getSerializedName() { return name; }
     }
 
     public static final EnumProperty<PolePart> PART = EnumProperty.create("part", PolePart.class);
-
     private static final VoxelShape SHAPE = Block.box(6, 0, 6, 10, 16, 10);
-
-    public static final com.mojang.serialization.MapCodec<ElectricalPoleBlock> CODEC = simpleCodec(
-            ElectricalPoleBlock::new);
+    public static final com.mojang.serialization.MapCodec<ElectricalPoleBlock> CODEC = simpleCodec(ElectricalPoleBlock::new);
 
     public ElectricalPoleBlock(Properties properties) {
         super(properties);
@@ -60,167 +49,62 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     }
 
     public ElectricalPoleBlock() {
-        this(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL)
-                .noOcclusion());
+        this(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0f).sound(SoundType.METAL).noOcclusion());
     }
 
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(PART);
-    }
-
-    @Override
-    public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return SHAPE;
-    }
-
-    @Override
-    protected com.mojang.serialization.MapCodec<? extends BaseEntityBlock> codec() {
-        return CODEC;
-    }
+    @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(PART); }
+    @Override public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPE; }
+    @Override protected com.mojang.serialization.MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
 
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         if (state.getValue(PART) == PolePart.BOTTOM) {
-            FactoryLogger.power("Creating ElectricalPoleBE at " + pos);
             return new ElectricalPoleBlockEntity(pos, state);
         }
         return null;
     }
 
-    @Override
-    public RenderShape getRenderShape(BlockState state) {
-        return RenderShape.MODEL;
-    }
-
-    @Nullable
-    @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
-        BlockPos pos = context.getClickedPos();
-        Level level = context.getLevel();
-        if (pos.getY() < level.getMaxBuildHeight() - 2 &&
-                level.getBlockState(pos.above()).canBeReplaced(context) &&
-                level.getBlockState(pos.above(2)).canBeReplaced(context)) {
-            return this.defaultBlockState();
-        }
-        return null;
-    }
+    @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
 
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
-        if (!level.isClientSide && !state.is(oldState.getBlock())) {
-            if (state.getValue(PART) == PolePart.BOTTOM) {
-                FactoryNetworkManager manager = FactoryNetworkManager.get(level);
-                if (manager != null) {
-                    manager.addNode(pos);
-                    manager.setDirty();
-                }
-            }
+        if (!level.isClientSide && state.getValue(PART) == PolePart.BOTTOM) {
+            FactoryNetworkManager.get(level).addNode(pos);
         }
         super.onPlace(state, level, pos, oldState, isMoving);
     }
 
-    @Override
-    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer,
-            ItemStack stack) {
-        if (level.isClientSide) return;
-        
-        if (state.getValue(PART) == PolePart.BOTTOM) {
-            if (placer instanceof Player) {
-                // MANUAL PLACEMENT: Player is here, place the full structure instantly.
-                BlockPos middle = pos.above();
-                BlockPos top = pos.above(2);
-                if (level.getBlockState(middle).isAir() || level.getBlockState(middle).canBeReplaced()) {
-                    level.setBlock(middle, state.setValue(PART, PolePart.MIDDLE), 3);
-                }
-                if (level.getBlockState(top).isAir() || level.getBlockState(top).canBeReplaced()) {
-                    level.setBlock(top, state.setValue(PART, PolePart.TOP), 3);
-                }
-            } else {
-                // SWARM/BLUEPRINT: Order drones to build it part-by-part.
-                BlockPos middle = pos.above();
-                if (level.getBlockState(middle).isAir()) {
-                    com.example.ghostlib.util.GhostJobManager.get(level).registerJob(middle, 
-                        com.example.ghostlib.block.entity.GhostBlockEntity.GhostState.UNASSIGNED, 
-                        state.setValue(PART, PolePart.MIDDLE));
-                }
-                BlockPos top = pos.above(2);
-                if (level.getBlockState(top).isAir()) {
-                    com.example.ghostlib.util.GhostJobManager.get(level).registerJob(top, 
-                        com.example.ghostlib.block.entity.GhostBlockEntity.GhostState.UNASSIGNED, 
-                        state.setValue(PART, PolePart.TOP));
-                }
-            }
-        }
-    }
-
-    @Override
-    public BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level,
-            BlockPos pos, BlockPos neighborPos) {
-        PolePart part = state.getValue(PART);
-        if (direction.getAxis() == Direction.Axis.Y) {
-            // If the neighbor part we depend on is AIR, we break too.
-            if (part == PolePart.MIDDLE) {
-                if (direction == Direction.DOWN && neighborState.isAir()) return Blocks.AIR.defaultBlockState();
-                if (direction == Direction.UP && neighborState.isAir()) return Blocks.AIR.defaultBlockState();
-            }
-            if (part == PolePart.TOP && direction == Direction.DOWN && neighborState.isAir()) {
-                return Blocks.AIR.defaultBlockState();
-            }
-
-            // Standard connection logic
-            if (part == PolePart.BOTTOM && direction == Direction.UP) {
-                if (!neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
-                    return Blocks.AIR.defaultBlockState();
-            }
-            if (part == PolePart.MIDDLE) {
-                if (direction == Direction.UP && !neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
-                    return Blocks.AIR.defaultBlockState();
-                if (direction == Direction.DOWN && !neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
-                    return Blocks.AIR.defaultBlockState();
-            }
-            if (part == PolePart.TOP && direction == Direction.DOWN) {
-                if (!neighborState.is(this) && !neighborState.isAir() && !(neighborState.getBlock() instanceof com.example.ghostlib.block.GhostBlock))
-                    return Blocks.AIR.defaultBlockState();
-            }
-        }
-        return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
-    }
-
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock())) {
-            // Only disconnect if BOTTOM
-            if (state.getValue(PART) == PolePart.BOTTOM) {
-                if (!level.isClientSide) {
-                    FactoryNetworkManager manager = FactoryNetworkManager.get(level);
-                    if (manager != null) manager.removeNode(pos);
-                }
-                
-                BlockEntity be = level.getBlockEntity(pos);
-                if (be instanceof ElectricalPoleBlockEntity pole) {
-                    pole.disconnectAll();
-                }
-            }
-        }
-        super.onRemove(state, level, pos, newState, isMoving);
-    }
-
     @Nullable
     @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
-            BlockEntityType<T> type) {
-        if (level.isClientSide)
-            return null;
-        if (state.getValue(PART) != PolePart.BOTTOM)
-            return null;
-            
-        // Force ticker for debugging - direct lambda to bypass potential registration mismatches
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+        if (level.isClientSide || state.getValue(PART) != PolePart.BOTTOM) return null;
         return (lvl, p, s, be) -> {
             if (be instanceof ElectricalPoleBlockEntity pole) {
                 ElectricalPoleBlockEntity.tick(lvl, p, s, pole);
             }
         };
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        if (level.isClientSide) return;
+        if (state.getValue(PART) == PolePart.BOTTOM) {
+            BlockPos middle = pos.above();
+            BlockPos top = pos.above(2);
+            if (level.getBlockState(middle).isAir() || level.getBlockState(middle).canBeReplaced())
+                level.setBlock(middle, state.setValue(PART, PolePart.MIDDLE), 3);
+            if (level.getBlockState(top).isAir() || level.getBlockState(top).canBeReplaced())
+                level.setBlock(top, state.setValue(PART, PolePart.TOP), 3);
+        }
+    }
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+        if (!state.is(newState.getBlock()) && state.getValue(PART) == PolePart.BOTTOM) {
+            FactoryNetworkManager.get(level).removeNode(pos);
+            if (level.getBlockEntity(pos) instanceof ElectricalPoleBlockEntity pole) pole.disconnectAll();
+        }
+        super.onRemove(state, level, pos, newState, isMoving);
     }
 }
