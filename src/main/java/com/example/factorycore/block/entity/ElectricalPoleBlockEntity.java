@@ -19,7 +19,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private final Set<BlockPos> connections = new HashSet<>();
     private BlockPos connectedFloor = null;
     private boolean initialized = false;
-    private static final double MAX_RANGE_SQR = 36.0; // Increased to 6 blocks inclusive
+    private static final double MAX_RANGE_SQR = 36.1; // 6 blocks inclusive
 
     public ElectricalPoleBlockEntity(BlockPos pos, BlockState blockState) {
         super(CoreBlockEntities.ELECTRICAL_POLE.get(), pos, blockState);
@@ -55,16 +55,15 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public static void tick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
         
-        // Staggered updates based on position to prevent lag spikes
         long gameTime = level.getGameTime();
-        long offset = pos.asLong();
+        long offset = Math.abs(pos.asLong() % 20);
         
-        if ((gameTime + offset) % 10 == 0) { // Fast sync (0.5s)
+        if ((gameTime + offset) % 10 == 0) {
             be.validateConnections();
             be.checkNetworkMerge();
         }
         
-        if ((gameTime + offset) % 20 == 0) { // Slow sync (1s)
+        if ((gameTime + offset) % 20 == 0) {
             be.maintainMachineConnections();
         }
 
@@ -78,47 +77,38 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (network == null || network.getStorage().getEnergyStored() <= 0) return;
 
         net.neoforged.neoforge.energy.IEnergyStorage source = network.getStorage();
-        int maxExtract = 10000; // Limit extraction rate per tick per connection
+        int maxExtract = 10000;
 
         for (BlockPos target : connections) {
-            // Skip other poles
             if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
 
-            // Determine best side to insert energy (Side facing the pole)
-            net.minecraft.core.Direction directionToPole = getDirectionTo(target, worldPosition);
+            net.minecraft.core.Direction dirToPole = getDirectionTo(target, worldPosition);
             
-            // Try specific side first
+            // Priority 1: Side facing pole
             net.neoforged.neoforge.energy.IEnergyStorage dest = level.getCapability(
                 net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
-                target, 
-                directionToPole
-            );
+                target, dirToPole);
             
-            // Fallback: Try null side (internal/omnidirectional)
+            // Priority 2: Null side
             if (dest == null) {
                 dest = level.getCapability(
                     net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
-                    target, 
-                    null
-                );
+                    target, null);
             }
             
-            // Fallback: Try all other sides
+            // Priority 3: Any side
             if (dest == null) {
-                for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
-                    if (dir == directionToPole) continue;
+                for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
                     dest = level.getCapability(
                         net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
-                        target, 
-                        dir
-                    );
+                        target, d);
                     if (dest != null) break;
                 }
             }
 
             if (dest != null && dest.canReceive()) {
-                int simulatedExtract = source.extractEnergy(maxExtract, true);
-                int accepted = dest.receiveEnergy(simulatedExtract, false);
+                int simulated = source.extractEnergy(maxExtract, true);
+                int accepted = dest.receiveEnergy(simulated, false);
                 if (accepted > 0) {
                     source.extractEnergy(accepted, false);
                 }
@@ -146,10 +136,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
             }
             if (level.isLoaded(target)) {
                 boolean isPole = level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity;
-                boolean isMachine = !isPole && hasEnergyCapability(target);
-                
-                // Remove if it's neither a pole nor a machine we can power
-                if (!isPole && !isMachine) {
+                if (!isPole && !hasEnergyCapability(target)) {
                     it.remove();
                     changed = true;
                 }
@@ -162,38 +149,30 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
 
     private void maintainMachineConnections() {
-        // 1. Scan for machines in range
-        BlockPos.betweenClosedStream(worldPosition.offset(-4, -4, -4), worldPosition.offset(4, 4, 4)).forEach(p -> {
+        // Scan 6 blocks radius for machines
+        BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition)) return;
-            // Check distance
             if (p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
 
-            // Check if it's a machine (has energy, not a pole)
             if (!(level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) && hasEnergyCapability(p)) {
-                // It's a machine. Check if we should be the one connecting.
-                BlockPos target = p.immutable();
-                handleMachineConnection(target);
+                handleMachineConnection(p.immutable());
             }
         });
     }
 
     private void handleMachineConnection(BlockPos machinePos) {
-        // Find ALL poles connected to this machine (or close enough to connect)
-        // This is expensive to scan globally, so we scan local area of the machine.
-        
         BlockPos closestPole = null;
         double minDst = Double.MAX_VALUE;
 
-        // Scan around the MACHINE to find nearby poles
-        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-4, -4, -4), machinePos.offset(4, 4, 4))) {
+        // Scan 6 blocks around the MACHINE to find its best pole
+        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-6, -6, -6), machinePos.offset(6, 6, 6))) {
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
                 double dst = p.distSqr(machinePos);
                 if (dst <= MAX_RANGE_SQR) {
                     if (dst < minDst) {
                         minDst = dst;
-                        closestPole = p;
-                    } else if (dst == minDst && p.equals(this.worldPosition)) {
-                        // Tie-breaker: prefer self if equal distance (stability)
+                        closestPole = p.immutable();
+                    } else if (Math.abs(dst - minDst) < 0.001 && p.equals(this.worldPosition)) {
                         closestPole = this.worldPosition;
                     }
                 }
@@ -202,18 +181,14 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
         if (closestPole != null) {
             if (closestPole.equals(this.worldPosition)) {
-                // I am the closest! Connect if not already.
                 if (!connections.contains(machinePos)) {
-                    // Check if another pole is currently holding it (and steal it)
-                    // We rely on the *other* pole running this same logic and disconnecting itself.
-                    // But for immediate visual feedback, we can force disconnect neighbors? 
-                    // No, let's just connect. The other pole will disconnect next tick.
                     connectOneWay(machinePos);
+                    com.example.factorycore.util.FactoryLogger.power("Pole at " + worldPosition + " CLAIMED machine at " + machinePos);
                 }
             } else {
-                // I am NOT the closest. Disconnect if connected.
                 if (connections.contains(machinePos)) {
                     removeConnection(machinePos);
+                    com.example.factorycore.util.FactoryLogger.power("Pole at " + worldPosition + " RELEASED machine at " + machinePos + " (Closer pole found at " + closestPole + ")");
                 }
             }
         }
@@ -221,69 +196,52 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     
     public void autoConnect() {
         java.util.List<BlockPos> candidates = new java.util.ArrayList<>();
-        // Search range reduced to 4 blocks
-        BlockPos.betweenClosedStream(worldPosition.offset(-4, -2, -4), worldPosition.offset(4, 5, 4)).forEach(p -> {
+        BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition)) return;
-            double d = p.distSqr(worldPosition);
-            if (d > MAX_RANGE_SQR) return; // Inclusive check
+            if (p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
 
-            // Check for electrical poles first
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity other) {
-                if (other.connections.size() < 5) {
-                    candidates.add(p.immutable());
-                }
-            }
-            // Check for machines with energy capabilities
-            else if (hasEnergyCapability(p)) {
+                if (other.connections.size() < 10) candidates.add(p.immutable());
+            } else if (hasEnergyCapability(p)) {
                 candidates.add(p.immutable());
             }
         });
 
-        // Sort by distance (closest first)
         candidates.sort(java.util.Comparator.comparingDouble(p -> p.distSqr(worldPosition)));
 
         for (BlockPos p : candidates) {
-            if (connections.size() >= 5) break;
-            BlockEntity be = level.getBlockEntity(p);
-            if (be instanceof ElectricalPoleBlockEntity other && other.connections.size() < 5) {
+            if (connections.size() >= 10) break;
+            if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
                  this.connect(p);
-            }
-            // Connect to machines with energy capabilities
-            else if (hasEnergyCapability(p)) {
-                this.connect(p);
+            } else {
+                handleMachineConnection(p); // Respect "closest wins" even on load
             }
         }
     }
 
-    /**
-     * Check if a block has an energy capability that we can connect to
-     */
     private boolean hasEnergyCapability(BlockPos pos) {
-        net.neoforged.neoforge.capabilities.BlockCapability<net.neoforged.neoforge.energy.IEnergyStorage, net.minecraft.core.Direction> capability =
-            net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK;
-
-        for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
-            net.neoforged.neoforge.energy.IEnergyStorage storage = level.getCapability(capability, pos, direction.getOpposite());
-            if (storage != null) {
-                return true;
-            }
+        var cap = net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK;
+        if (level.getCapability(cap, pos, null) != null) return true;
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+            if (level.getCapability(cap, pos, d) != null) return true;
         }
         return false;
     }
 
     public void connect(BlockPos other) {
-        if (other.equals(this.worldPosition) || connections.contains(other)) return;
-        connections.add(other);
+        BlockPos target = other.immutable();
+        if (target.equals(this.worldPosition) || connections.contains(target)) return;
+        connections.add(target);
         setChanged();
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-        BlockEntity otherBe = level.getBlockEntity(other);
+        BlockEntity otherBe = level.getBlockEntity(target);
         if (otherBe instanceof ElectricalPoleBlockEntity otherPole) {
             otherPole.connectOneWay(this.worldPosition);
         }
     }
     
     public void connectOneWay(BlockPos other) {
-        if (connections.add(other)) {
+        if (connections.add(other.immutable())) {
             setChanged();
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
@@ -297,6 +255,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         }
         connections.clear();
         setChanged();
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
     
     public void removeConnection(BlockPos other) {
@@ -312,19 +271,17 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
        ElectricalNetwork myNet = manager.getNetworkAt(worldPosition);
        if (myNet == null) {
-           // Should have been added onPlace, but retry just in case
            manager.addNode(worldPosition);
            myNet = manager.getNetworkAt(worldPosition);
            if (myNet == null) return;
        }
 
-       // 1. Search for Floor Networks (Increased range to 4 for bridging islands)
        BlockPos closestFloor = null;
        double minDist = Double.MAX_VALUE;
-       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-4, -2, -4), worldPosition.offset(4, 2, 4))) {
+       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-6, -2, -6), worldPosition.offset(6, 2, 6))) {
            if (level.getBlockState(p).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get())) {
                double d = p.distSqr(worldPosition);
-               if (d < minDist) {
+               if (d < minDist && d <= MAX_RANGE_SQR) {
                    minDist = d;
                    closestFloor = p.immutable();
                }
@@ -332,11 +289,9 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
        }
 
        if (closestFloor != null) {
-           // Ensure floor is registered
            manager.addNode(closestFloor);
            ElectricalNetwork floorNet = manager.getNetworkAt(closestFloor);
            if (floorNet != null && floorNet.getId() != myNet.getId()) {
-               com.example.factorycore.util.FactoryLogger.power("Pole at " + worldPosition + " found island floor at " + closestFloor + ". Merging net " + myNet.getId() + " -> " + floorNet.getId());
                manager.mergeNetworks(floorNet, myNet); 
                myNet = manager.getNetworkAt(worldPosition);
                if (myNet == null) return;
@@ -353,7 +308,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
        }
 
-       // 2. Bridge to other connected poles
        for (BlockPos otherPos : connections) {
            ElectricalNetwork otherNet = manager.getNetworkAt(otherPos);
            if (otherNet != null && otherNet.getId() != myNet.getId()) {
@@ -362,10 +316,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
                if (myNet == null) return;
            }
        }
-    }
-    
-    private ElectricalNetwork getNetworkBelow(BlockPos pos) {
-        return FactoryNetworkManager.get(level).getNetworkAt(pos.below());
     }
 
     @Override
@@ -384,12 +334,12 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         connections.clear();
         if (tag.contains("Connections")) {
             long[] arr = tag.getLongArray("Connections");
-            for (long val : arr) connections.add(BlockPos.of(val));
+            for (long val : arr) connections.add(BlockPos.of(val).immutable());
         } else if (tag.contains("Connections", Tag.TAG_LIST)) {
             ListTag list = tag.getList("Connections", Tag.TAG_COMPOUND);
-            for (int i = 0; i < list.size(); i++) NbtUtils.readBlockPos(list.getCompound(i), "pos").ifPresent(connections::add);
+            for (int i = 0; i < list.size(); i++) NbtUtils.readBlockPos(list.getCompound(i), "pos").map(BlockPos::immutable).ifPresent(connections::add);
         }
-        if (tag.contains("ConnectedFloor")) connectedFloor = BlockPos.of(tag.getLong("ConnectedFloor"));
+        if (tag.contains("ConnectedFloor")) connectedFloor = BlockPos.of(tag.getLong("ConnectedFloor")).immutable();
     }
     
     @Override
