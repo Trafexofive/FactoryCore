@@ -47,6 +47,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     public void onLoad() {
         super.onLoad();
         if (level != null && !level.isClientSide) {
+            System.out.println("DEBUG: Pole onLoad at " + worldPosition);
             autoConnect();
             checkNetworkMerge();
             initialized = true;
@@ -57,6 +58,8 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (level.isClientSide) return;
         
         long gameTime = level.getGameTime();
+        if (gameTime % 40 == 0) System.out.println("DEBUG: Pole Tick Heartbeat at " + pos);
+
         long offset = Math.abs(pos.asLong() % 20);
         
         if ((gameTime + offset) % 10 == 0) {
@@ -194,7 +197,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
     
     public void autoConnect() {
-        // ... (keep simplified for brevity in this step, similar to previous)
         java.util.List<BlockPos> candidates = new java.util.ArrayList<>();
         BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
             if (p.equals(worldPosition)) return;
@@ -264,7 +266,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
 
     private void checkNetworkMerge() {
-       // ... existing implementation ...
        FactoryNetworkManager manager = FactoryNetworkManager.get(level);
        if (manager == null) return;
 
