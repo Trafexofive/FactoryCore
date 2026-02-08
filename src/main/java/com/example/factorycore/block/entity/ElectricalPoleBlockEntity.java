@@ -3,6 +3,7 @@ package com.example.factorycore.block.entity;
 import com.example.factorycore.power.ElectricalNetwork;
 import com.example.factorycore.power.FactoryNetworkManager;
 import com.example.factorycore.registry.CoreBlockEntities;
+import com.example.factorycore.block.ElectricalPoleBlock;
 import com.example.factorycore.util.FactoryLogger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -17,9 +18,12 @@ import java.util.Iterator;
 import java.util.Set;
 
 public class ElectricalPoleBlockEntity extends BlockEntity {
+    private int scanRange = 6;
+    private double maxRangeSqr = 36.1;
+    private int transferLimit = 10000;
+
     private final Set<BlockPos> connections = new HashSet<>();
     private BlockPos connectedFloor = null;
-    private static final double MAX_RANGE_SQR = 36.1;
 
     public ElectricalPoleBlockEntity(BlockPos pos, BlockState blockState) {
         super(CoreBlockEntities.ELECTRICAL_POLE.get(), pos, blockState);
@@ -52,16 +56,16 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
     public static void tick(Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
-        long time = level.getGameTime();
         
-        // Critical Logic (Network & Validation)
-        if (time % 5 == 0) {
+        long time = level.getGameTime();
+        long offset = Math.abs(pos.asLong() % 20);
+        
+        if ((time + offset) % 10 == 0) {
             be.validateConnections();
             be.checkNetworkMerge();
         }
 
-        // Machine discovery
-        if (time % 20 == 0) {
+        if ((time + offset) % 20 == 0) {
             be.maintainMachineConnections();
         }
 
@@ -73,34 +77,44 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (network == null) return;
 
         for (BlockPos target : connections) {
-            if (level.getBlockEntity(target) instanceof ElectricalPoleBlockEntity) continue;
+            if (isPole(target)) continue;
 
-            IEnergyStorage machine = getEnergyCapability(target);
+            Direction dirToPole = Direction.getNearest(
+                worldPosition.getX() - target.getX(),
+                worldPosition.getY() - target.getY(),
+                worldPosition.getZ() - target.getZ()
+            );
+            
+            IEnergyStorage machine = getEnergyCapability(target, dirToPole);
             if (machine == null) continue;
 
-            // DISCHARGE: Network -> Machine (Push)
+            // 1. DISCHARGE: Network -> Machine (Push)
             if (machine.canReceive() && network.getEnergyStored() > 0) {
-                int toPush = network.extractEnergy(10000, true);
+                int toPush = network.extractEnergy(transferLimit, true);
                 int accepted = machine.receiveEnergy(toPush, false);
-                if (accepted > 0) network.extractEnergy(accepted, false);
+                if (accepted > 0) {
+                    network.extractEnergy(accepted, false);
+                }
             }
 
-            // CHARGE: Machine -> Network (Pull)
+            // 2. CHARGE: Machine -> Network (Pull)
             if (machine.canExtract()) {
                 int space = network.getMaxEnergyStored() - network.getEnergyStored();
                 if (space > 0) {
-                    int toPull = Math.min(space, 10000);
+                    int toPull = Math.min(space, transferLimit);
                     int extracted = machine.extractEnergy(toPull, false);
-                    if (extracted > 0) network.receiveEnergy(extracted, false);
+                    if (extracted > 0) {
+                        network.receiveEnergy(extracted, false);
+                    }
                 }
             }
         }
     }
 
     private void maintainMachineConnections() {
-        BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
-            if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
-            if (!(level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) && getEnergyCapability(p) != null) {
+        BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
+            if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
+            if (!isPole(p) && getEnergyCapability(p, null) != null) {
                 handleMachineConnection(p.immutable());
             }
         });
@@ -109,10 +123,10 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private void handleMachineConnection(BlockPos machinePos) {
         BlockPos closestPole = null;
         double minDst = Double.MAX_VALUE;
-        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-6, -6, -6), machinePos.offset(6, 6, 6))) {
+        for (BlockPos p : BlockPos.betweenClosed(machinePos.offset(-scanRange, -scanRange, -scanRange), machinePos.offset(scanRange, scanRange, scanRange))) {
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) {
-                double dst = p.distSqr(machinePos);
-                if (dst <= MAX_RANGE_SQR) {
+                double dst = machinePos.distSqr(p);
+                if (dst <= maxRangeSqr) {
                     if (dst < minDst) { minDst = dst; closestPole = p.immutable(); }
                     else if (Math.abs(dst - minDst) < 0.001 && p.equals(this.worldPosition)) closestPole = this.worldPosition;
                 }
@@ -124,15 +138,22 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         }
     }
 
-    private IEnergyStorage getEnergyCapability(BlockPos pos) {
+    private IEnergyStorage getEnergyCapability(BlockPos pos, Direction side) {
         var cap = net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK;
-        IEnergyStorage s = level.getCapability(cap, pos, null);
+        IEnergyStorage s = level.getCapability(cap, pos, side);
+        if (s != null) return s;
+        s = level.getCapability(cap, pos, null);
         if (s != null) return s;
         for (Direction d : Direction.values()) {
+            if (d == side) continue;
             s = level.getCapability(cap, pos, d);
             if (s != null) return s;
         }
         return null;
+    }
+
+    private boolean isPole(BlockPos pos) {
+        return level.getBlockState(pos).getBlock() instanceof ElectricalPoleBlock;
     }
 
     private void validateConnections() {
@@ -141,7 +162,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         while (it.hasNext()) {
             BlockPos target = it.next();
             if (level.isLoaded(target)) {
-                if (target.distSqr(worldPosition) > MAX_RANGE_SQR || level.getBlockState(target).isAir()) {
+                if (target.distSqr(worldPosition) > maxRangeSqr || level.getBlockState(target).isAir()) {
                     it.remove();
                     changed = true;
                 }
@@ -151,8 +172,8 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     }
 
     public void autoConnect() {
-        BlockPos.betweenClosedStream(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6)).forEach(p -> {
-            if (p.equals(worldPosition) || p.distSqr(worldPosition) > MAX_RANGE_SQR) return;
+        BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
+            if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
             if (level.getBlockEntity(p) instanceof ElectricalPoleBlockEntity) connect(p.immutable());
         });
     }
@@ -181,7 +202,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
        if (myNet == null) return;
        BlockPos bestFloor = null;
        double minFloorDst = Double.MAX_VALUE;
-       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-6, -6, -6), worldPosition.offset(6, 6, 6))) {
+       for (BlockPos p : BlockPos.betweenClosed(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange))) {
            if (p.equals(worldPosition)) continue;
            BlockState s = level.getBlockState(p);
            if (s.is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get()) || s.getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock) {
@@ -203,6 +224,8 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         for (BlockPos p : connections) arr[i++] = p.asLong();
         tag.putLongArray("Connections", arr);
         if (connectedFloor != null) tag.putLong("ConnectedFloor", connectedFloor.asLong());
+        tag.putInt("ScanRange", scanRange);
+        tag.putInt("TransferLimit", transferLimit);
     }
 
     @Override public void loadAdditional(CompoundTag tag, net.minecraft.core.HolderLookup.Provider provider) {
@@ -210,6 +233,11 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         connections.clear();
         if (tag.contains("Connections")) { for (long val : tag.getLongArray("Connections")) connections.add(BlockPos.of(val).immutable()); }
         if (tag.contains("ConnectedFloor")) connectedFloor = BlockPos.of(tag.getLong("ConnectedFloor")).immutable();
+        if (tag.contains("ScanRange")) {
+            scanRange = tag.getInt("ScanRange");
+            maxRangeSqr = (scanRange * scanRange) + 0.1;
+        }
+        if (tag.contains("TransferLimit")) transferLimit = tag.getInt("TransferLimit");
     }
     @Override public CompoundTag getUpdateTag(net.minecraft.core.HolderLookup.Provider provider) { return saveWithoutMetadata(provider); }
     @Override public net.minecraft.network.protocol.Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getUpdatePacket() { return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this); }
