@@ -105,6 +105,17 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     }
 
     @Override
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+        if (!level.isClientSide && state.getValue(PART) == PolePart.BOTTOM) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof ElectricalPoleBlockEntity pole) {
+                pole.refresh();
+            }
+        }
+    }
+
+    @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && state.getValue(PART) == PolePart.BOTTOM) {
             FactoryNetworkManager manager = FactoryNetworkManager.get(level);
