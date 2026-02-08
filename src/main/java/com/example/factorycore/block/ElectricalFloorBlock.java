@@ -60,6 +60,20 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide) {
             FactoryNetworkManager.get(level).removeNode(pos);
+            
+            // Notify nearby poles to un-render cables (Fix Zombie Cables)
+            BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
+            for (int x = -15; x <= 15; x++) {
+                for (int y = -8; y <= 8; y++) {
+                    for (int z = -15; z <= 15; z++) {
+                        mpos.set(pos.getX() + x, pos.getY() + y, pos.getZ() + z);
+                        BlockEntity be = level.getBlockEntity(mpos);
+                        if (be instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity pole) {
+                            pole.refresh();
+                        }
+                    }
+                }
+            }
         }
         super.onRemove(state, level, pos, newState, isMoving);
     }
