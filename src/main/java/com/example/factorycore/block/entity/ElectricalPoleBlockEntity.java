@@ -53,6 +53,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         autoConnect();
         checkNetworkMerge();
         maintainMachineConnections();
+        maintainFloorConnections();
         validateConnections();
     }
 
@@ -69,6 +70,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
         if ((time + offset) % 20 == 0) {
             be.maintainMachineConnections();
+            be.maintainFloorConnections();
         }
 
         be.handleEnergyTransfer();
@@ -116,10 +118,55 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private void maintainMachineConnections() {
         BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
-            if (!isPole(p) && getEnergyCapability(p, null) != null) {
+            // Skip poles AND floors (floors handled by specialized logic)
+            if (!isPole(p) && !isFloor(p) && getEnergyCapability(p, null) != null) {
                 handleMachineConnection(p.immutable());
             }
         });
+    }
+
+    private void maintainFloorConnections() {
+        FactoryNetworkManager manager = FactoryNetworkManager.get(level);
+        if (manager == null) return;
+
+        // Group floors by Network ID
+        java.util.Map<Integer, java.util.List<BlockPos>> floorsByNetwork = new java.util.HashMap<>();
+
+        BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
+            if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
+            if (isFloor(p)) {
+                com.example.factorycore.power.ElectricalNetwork net = manager.getNetworkAt(p);
+                if (net != null) {
+                    floorsByNetwork.computeIfAbsent(net.getId(), k -> new java.util.ArrayList<>()).add(p.immutable());
+                }
+            }
+        });
+
+        // For each network, connect ONLY to the closest floor block
+        for (java.util.List<BlockPos> networkFloors : floorsByNetwork.values()) {
+            BlockPos closest = null;
+            double minDst = Double.MAX_VALUE;
+
+            for (BlockPos p : networkFloors) {
+                double dst = p.distSqr(worldPosition);
+                if (dst < minDst) {
+                    minDst = dst;
+                    closest = p;
+                }
+            }
+
+            if (closest != null) {
+                // Connect to closest
+                if (!connections.contains(closest)) connectOneWay(closest);
+
+                // Disconnect from ALL others in this same network (redundancy check)
+                for (BlockPos p : networkFloors) {
+                    if (!p.equals(closest) && connections.contains(p)) {
+                        removeConnection(p);
+                    }
+                }
+            }
+        }
     }
 
     private void handleMachineConnection(BlockPos machinePos) {
@@ -156,6 +203,10 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
     private boolean isPole(BlockPos pos) {
         return level.getBlockState(pos).getBlock() instanceof ElectricalPoleBlock;
+    }
+
+    private boolean isFloor(BlockPos pos) {
+        return level.getBlockState(pos).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get());
     }
 
     private void validateConnections() {
