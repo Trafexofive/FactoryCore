@@ -79,6 +79,39 @@ public class ElectricalNetwork {
         this.dirty = false;
     }
 
+    public void tick(Level level) {
+        if (energyBuffer.getEnergyStored() <= 0) return;
+
+        // Distribute to machines on top of members
+        // Limit total output per tick? For now, we assume high throughput.
+        // We can optimize this by caching "active" outputs later.
+        for (BlockPos pos : members) {
+            if (energyBuffer.getEnergyStored() <= 0) break;
+
+            // Check block ABOVE the floor
+            BlockPos machinePos = pos.above();
+            // Machine is DOWN relative to the cable/machine, but we are connecting TO the bottom of the machine.
+            // So we query the DOWN face of the machine.
+            net.neoforged.neoforge.energy.IEnergyStorage machineStorage = level.getCapability(
+                net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                machinePos, 
+                net.minecraft.core.Direction.DOWN
+            );
+
+            if (machineStorage != null && machineStorage.canReceive()) {
+                // Max output per connection per tick
+                int maxOutput = 1000; 
+                int extracted = energyBuffer.extractEnergy(maxOutput, true); // Simulate extraction
+                if (extracted > 0) {
+                    int accepted = machineStorage.receiveEnergy(extracted, false);
+                    if (accepted > 0) {
+                        energyBuffer.extractEnergy(accepted, false); // Actually extract
+                    }
+                }
+            }
+        }
+    }
+
     public void merge(ElectricalNetwork other) {
         if (other == this) return;
         com.example.factorycore.util.FactoryLogger.power("Merging Network " + other.getId() + " into Network " + this.id);

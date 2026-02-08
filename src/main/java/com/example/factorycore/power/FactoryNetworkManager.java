@@ -101,6 +101,12 @@ public class FactoryNetworkManager extends SavedData {
      * - Energy buffers are combined (up to capacity).
      * - Old IDs are invalidated and redirected to the new master ID.
      */
+    public void tick(Level level) {
+        for (ElectricalNetwork net : networks.values()) {
+            net.tick(level);
+        }
+    }
+
     public void addNode(BlockPos pos) {
         addNode(pos, -1);
     }
