@@ -59,6 +59,18 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
 
     @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
 
+    /**
+     * Helper to find the base (BOTTOM) position of a pole structure.
+     */
+    public static BlockPos getPoleBase(net.minecraft.world.level.LevelAccessor level, BlockPos pos, BlockState state) {
+        if (!(state.getBlock() instanceof ElectricalPoleBlock)) return null;
+        PolePart part = state.getValue(PART);
+        if (part == PolePart.BOTTOM) return pos;
+        if (part == PolePart.MIDDLE) return pos.below();
+        if (part == PolePart.TOP) return pos.below(2);
+        return null;
+    }
+
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
         if (!level.isClientSide && state.getValue(PART) == PolePart.BOTTOM && !state.is(oldState.getBlock())) {

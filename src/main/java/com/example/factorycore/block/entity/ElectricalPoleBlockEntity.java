@@ -16,13 +16,15 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ElectricalPoleBlockEntity extends BlockEntity {
     private int scanRange = 6;
     private double maxRangeSqr = 36.1;
     private int transferLimit = 10000;
 
-    private final Set<BlockPos> connections = new HashSet<>();
+    // Thread-safe set to prevent Sodium cloning crashes
+    private final Set<BlockPos> connections = ConcurrentHashMap.newKeySet();
     private BlockPos connectedFloor = null;
 
     public ElectricalPoleBlockEntity(BlockPos pos, BlockState blockState) {

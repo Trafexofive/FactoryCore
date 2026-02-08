@@ -2,10 +2,10 @@ package com.example.factorycore.event;
 
 import com.example.factorycore.FactoryCore;
 import com.example.factorycore.command.FactoryCommand;
+import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
-
 import net.neoforged.neoforge.event.level.BlockEvent;
 
 @EventBusSubscriber(modid = FactoryCore.MODID, bus = EventBusSubscriber.Bus.GAME)
@@ -30,7 +30,7 @@ public class ModEventSubscriber {
                 for (int z = -6; z <= 6; z++) {
                     mpos.set(pos.getX() + x, pos.getY() + y, pos.getZ() + z);
                     net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(mpos);
-                    if (be instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity pole) {
+                    if (be instanceof ElectricalPoleBlockEntity pole) {
                         pole.refresh();
                     }
                 }
@@ -46,7 +46,6 @@ public class ModEventSubscriber {
         net.minecraft.world.level.block.entity.BlockEntity be = event.getLevel().getBlockEntity(pos);
         
         if (be instanceof com.example.factorycore.block.entity.AutoAssemblerBlockEntity assembler) {
-            System.out.println("Forcing AutoAssembler GUI from Event");
             event.getEntity().openMenu(assembler, buf -> {
                 buf.writeBlockPos(pos);
                 com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BLOCK_STATE_STREAM_CODEC.encode(buf, event.getLevel().getBlockState(pos));
@@ -54,7 +53,6 @@ public class ModEventSubscriber {
             event.setCanceled(true);
             event.setCancellationResult(net.minecraft.world.InteractionResult.CONSUME);
         } else if (be instanceof com.example.factorycore.block.entity.ElectricFurnaceBlockEntity furnace) {
-            System.out.println("Forcing ElectricFurnace GUI from Event");
             event.getEntity().openMenu(furnace, buf -> {
                 buf.writeBlockPos(pos);
                 com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BLOCK_STATE_STREAM_CODEC.encode(buf, event.getLevel().getBlockState(pos));
