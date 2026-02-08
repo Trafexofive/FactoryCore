@@ -23,7 +23,6 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private double maxRangeSqr = 36.1;
     private int transferLimit = 10000;
 
-    // Thread-safe set to prevent Sodium cloning crashes
     private final Set<BlockPos> connections = ConcurrentHashMap.newKeySet();
     private BlockPos connectedFloor = null;
 
@@ -43,9 +42,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     @Override
     public void onLoad() {
         super.onLoad();
-        if (level != null && !level.isClientSide) {
-            refresh();
-        }
+        if (level != null && !level.isClientSide) refresh();
     }
 
     public void refresh() {
@@ -59,20 +56,16 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
 
     public static void tick(Level level, BlockPos pos, BlockState state, ElectricalPoleBlockEntity be) {
         if (level.isClientSide) return;
-        
         long time = level.getGameTime();
         long offset = Math.abs(pos.asLong() % 20);
-        
         if ((time + offset) % 10 == 0) {
             be.validateConnections();
             be.checkNetworkMerge();
         }
-
         if ((time + offset) % 20 == 0) {
             be.maintainMachineConnections();
             be.maintainFloorConnections();
         }
-
         be.handleEnergyTransfer();
     }
 
@@ -81,7 +74,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (network == null) return;
 
         for (BlockPos target : connections) {
-            if (isPole(target)) continue;
+            if (isPole(target) || isFloor(target)) continue;
 
             Direction dirToPole = Direction.getNearest(
                 worldPosition.getX() - target.getX(),
@@ -92,24 +85,18 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
             IEnergyStorage machine = getEnergyCapability(target, dirToPole);
             if (machine == null) continue;
 
-            // 1. DISCHARGE: Network -> Machine (Push)
             if (machine.canReceive() && network.getEnergyStored() > 0) {
                 int toPush = network.extractEnergy(transferLimit, true);
                 int accepted = machine.receiveEnergy(toPush, false);
-                if (accepted > 0) {
-                    network.extractEnergy(accepted, false);
-                }
+                if (accepted > 0) network.extractEnergy(accepted, false);
             }
 
-            // 2. CHARGE: Machine -> Network (Pull)
             if (machine.canExtract()) {
                 int space = network.getMaxEnergyStored() - network.getEnergyStored();
                 if (space > 0) {
                     int toPull = Math.min(space, transferLimit);
                     int extracted = machine.extractEnergy(toPull, false);
-                    if (extracted > 0) {
-                        network.receiveEnergy(extracted, false);
-                    }
+                    if (extracted > 0) network.receiveEnergy(extracted, false);
                 }
             }
         }
@@ -118,9 +105,13 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
     private void maintainMachineConnections() {
         BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
-            // Skip poles AND floors (floors handled by specialized logic)
-            if (!isPole(p) && !isFloor(p) && getEnergyCapability(p, null) != null) {
-                handleMachineConnection(p.immutable());
+            if (!isPole(p) && !isFloor(p)) {
+                // Do not connect directly to machines on floors
+                if (isFloor(p.below())) {
+                    if (connections.contains(p)) removeConnection(p);
+                    return;
+                }
+                if (getEnergyCapability(p, null) != null) handleMachineConnection(p.immutable());
             }
         });
     }
@@ -129,41 +120,46 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         FactoryNetworkManager manager = FactoryNetworkManager.get(level);
         if (manager == null) return;
 
-        // Group floors by Network ID
         java.util.Map<Integer, java.util.List<BlockPos>> floorsByNetwork = new java.util.HashMap<>();
-
         BlockPos.betweenClosedStream(worldPosition.offset(-scanRange, -scanRange, -scanRange), worldPosition.offset(scanRange, scanRange, scanRange)).forEach(p -> {
             if (p.equals(worldPosition) || p.distSqr(worldPosition) > maxRangeSqr) return;
             if (isFloor(p)) {
-                com.example.factorycore.power.ElectricalNetwork net = manager.getNetworkAt(p);
-                if (net != null) {
-                    floorsByNetwork.computeIfAbsent(net.getId(), k -> new java.util.ArrayList<>()).add(p.immutable());
-                }
+                ElectricalNetwork net = manager.getNetworkAt(p);
+                if (net != null) floorsByNetwork.computeIfAbsent(net.getId(), k -> new java.util.ArrayList<>()).add(p.immutable());
             }
         });
 
-        // For each network, connect ONLY to the closest floor block
-        for (java.util.List<BlockPos> networkFloors : floorsByNetwork.values()) {
+        for (var entry : floorsByNetwork.entrySet()) {
+            ElectricalNetwork net = manager.getNetwork(entry.getKey());
+            java.util.List<BlockPos> networkFloors = entry.getValue();
+            
             BlockPos closest = null;
             double minDst = Double.MAX_VALUE;
-
             for (BlockPos p : networkFloors) {
                 double dst = p.distSqr(worldPosition);
-                if (dst < minDst) {
-                    minDst = dst;
-                    closest = p;
-                }
+                if (dst < minDst) { minDst = dst; closest = p; }
             }
 
             if (closest != null) {
-                // Connect to closest
-                if (!connections.contains(closest)) connectOneWay(closest);
+                BlockPos currentAssigned = net.getAssignedPole();
+                boolean isWinner = false;
 
-                // Disconnect from ALL others in this same network (redundancy check)
-                for (BlockPos p : networkFloors) {
-                    if (!p.equals(closest) && connections.contains(p)) {
-                        removeConnection(p);
-                    }
+                if (currentAssigned == null || currentAssigned.equals(worldPosition)) isWinner = true;
+                else {
+                    // Tie-break with other pole
+                    if (level.getBlockEntity(currentAssigned) instanceof ElectricalPoleBlockEntity otherPole) {
+                        double otherDst = closest.distSqr(currentAssigned);
+                        if (minDst < otherDst) isWinner = true;
+                        else if (Math.abs(minDst - otherDst) < 0.001 && worldPosition.asLong() < currentAssigned.asLong()) isWinner = true;
+                    } else isWinner = true; // Other pole is gone
+                }
+
+                if (isWinner) {
+                    net.setAssignedPole(worldPosition);
+                    if (!connections.contains(closest)) connectOneWay(closest);
+                    for (BlockPos p : networkFloors) if (!p.equals(closest) && connections.contains(p)) removeConnection(p);
+                } else {
+                    for (BlockPos p : networkFloors) if (connections.contains(p)) removeConnection(p);
                 }
             }
         }
@@ -193,21 +189,12 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         if (s != null) return s;
         s = level.getCapability(cap, pos, null);
         if (s != null) return s;
-        for (Direction d : Direction.values()) {
-            if (d == side) continue;
-            s = level.getCapability(cap, pos, d);
-            if (s != null) return s;
-        }
+        for (Direction d : Direction.values()) { if (d != side) { s = level.getCapability(cap, pos, d); if (s != null) return s; } }
         return null;
     }
 
-    private boolean isPole(BlockPos pos) {
-        return level.getBlockState(pos).getBlock() instanceof ElectricalPoleBlock;
-    }
-
-    private boolean isFloor(BlockPos pos) {
-        return level.getBlockState(pos).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get());
-    }
+    private boolean isPole(BlockPos pos) { return level.getBlockState(pos).getBlock() instanceof ElectricalPoleBlock; }
+    private boolean isFloor(BlockPos pos) { return level.getBlockState(pos).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get()); }
 
     private void validateConnections() {
         boolean changed = false;
@@ -215,10 +202,7 @@ public class ElectricalPoleBlockEntity extends BlockEntity {
         while (it.hasNext()) {
             BlockPos target = it.next();
             if (level.isLoaded(target)) {
-                if (target.distSqr(worldPosition) > maxRangeSqr || level.getBlockState(target).isAir()) {
-                    it.remove();
-                    changed = true;
-                }
+                if (target.distSqr(worldPosition) > maxRangeSqr || level.getBlockState(target).isAir()) { it.remove(); changed = true; }
             }
         }
         if (changed) sync();

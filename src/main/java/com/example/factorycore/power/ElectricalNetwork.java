@@ -15,9 +15,9 @@ public class ElectricalNetwork {
     private final Set<BlockPos> members = new HashSet<>();
     
     // The shared energy buffer for the entire island.
-    // All connected machines pull from this single object.
     private final EnergyStorage energyBuffer;
     private boolean dirty = false;
+    private BlockPos assignedPole = null;
 
     public ElectricalNetwork(int id) {
         this.id = id;
@@ -26,7 +26,6 @@ public class ElectricalNetwork {
             @Override
             public synchronized int receiveEnergy(int maxReceive, boolean simulate) {
                 int r = super.receiveEnergy(maxReceive, simulate);
-                // Mark dirty only if energy actually changed
                 if (r > 0 && !simulate) dirty = true;
                 return r;
             }
@@ -37,11 +36,6 @@ public class ElectricalNetwork {
                 if (r > 0 && !simulate) dirty = true;
                 return r;
             }
-
-            @Override
-            public synchronized int getEnergyStored() {
-                return super.getEnergyStored();
-            }
         };
     }
 
@@ -49,17 +43,63 @@ public class ElectricalNetwork {
         return id;
     }
 
+    public BlockPos getAssignedPole() {
+        return assignedPole;
+    }
+
+    public void setAssignedPole(BlockPos assignedPole) {
+        this.assignedPole = assignedPole;
+        this.dirty = true;
+    }
+
+    public void tick(Level level) {
+        if (energyBuffer.getEnergyStored() <= 0) return;
+
+        for (BlockPos pos : members) {
+            if (energyBuffer.getEnergyStored() <= 0) break;
+
+            BlockPos machinePos = pos.above();
+            
+            // Query with DOWN face, then fallback to null side for generic machines
+            net.neoforged.neoforge.energy.IEnergyStorage machineStorage = level.getCapability(
+                net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                machinePos, 
+                net.minecraft.core.Direction.DOWN
+            );
+            
+            if (machineStorage == null) {
+                machineStorage = level.getCapability(
+                    net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
+                    machinePos, 
+                    null
+                );
+            }
+
+            if (machineStorage != null && machineStorage.canReceive()) {
+                int maxOutput = 1000; 
+                int extracted = energyBuffer.extractEnergy(maxOutput, true); 
+                if (extracted > 0) {
+                    int accepted = machineStorage.receiveEnergy(extracted, false);
+                    if (accepted > 0) {
+                        energyBuffer.extractEnergy(accepted, false);
+                    }
+                }
+            }
+        }
+    }
+
     public void addNode(BlockPos pos) {
         if (members.add(pos)) {
             dirty = true;
-            com.example.factorycore.util.FactoryLogger.power("Network " + id + " added node at " + pos + ". Total members: " + members.size());
         }
     }
 
     public void removeNode(BlockPos pos) {
         if (members.remove(pos)) {
             dirty = true;
-            com.example.factorycore.util.FactoryLogger.power("Network " + id + " removed node at " + pos + ". Remaining: " + members.size());
+            if (assignedPole != null && assignedPole.equals(pos)) {
+                assignedPole = null;
+            }
         }
     }
 
@@ -79,62 +119,29 @@ public class ElectricalNetwork {
         this.dirty = false;
     }
 
-    public void tick(Level level) {
-        if (energyBuffer.getEnergyStored() <= 0) return;
-
-        // Distribute to machines on top of members
-        // Limit total output per tick? For now, we assume high throughput.
-        // We can optimize this by caching "active" outputs later.
-        for (BlockPos pos : members) {
-            if (energyBuffer.getEnergyStored() <= 0) break;
-
-            // Check block ABOVE the floor
-            BlockPos machinePos = pos.above();
-            // Machine is DOWN relative to the cable/machine, but we are connecting TO the bottom of the machine.
-            // So we query the DOWN face of the machine.
-            net.neoforged.neoforge.energy.IEnergyStorage machineStorage = level.getCapability(
-                net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, 
-                machinePos, 
-                net.minecraft.core.Direction.DOWN
-            );
-
-            if (machineStorage != null && machineStorage.canReceive()) {
-                // Max output per connection per tick
-                int maxOutput = 1000; 
-                int extracted = energyBuffer.extractEnergy(maxOutput, true); // Simulate extraction
-                if (extracted > 0) {
-                    int accepted = machineStorage.receiveEnergy(extracted, false);
-                    if (accepted > 0) {
-                        energyBuffer.extractEnergy(accepted, false); // Actually extract
-                    }
-                }
-            }
-        }
-    }
-
     public void merge(ElectricalNetwork other) {
         if (other == this) return;
-        com.example.factorycore.util.FactoryLogger.power("Merging Network " + other.getId() + " into Network " + this.id);
-
-        // Absorb members
         this.members.addAll(other.members);
-        // Absorb energy
         int energy = other.energyBuffer.getEnergyStored();
-        // Force inject energy even beyond limit temporarily if needed, or cap it?
-        // Let's cap it to max capacity to be safe
         int space = this.energyBuffer.getMaxEnergyStored() - this.energyBuffer.getEnergyStored();
         int toAdd = Math.min(space, energy);
         this.energyBuffer.receiveEnergy(toAdd, false);
         
+        // Preserve assigned pole if current one is null
+        if (this.assignedPole == null) {
+            this.assignedPole = other.assignedPole;
+        }
+        
         this.dirty = true;
-        com.example.factorycore.util.FactoryLogger.power("Network " + id + " merged. New size: " + members.size() + ", Energy: " + energyBuffer.getEnergyStored());
     }
 
-    // Serialization
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putInt("Id", id);
         tag.putInt("Energy", energyBuffer.getEnergyStored());
+        if (assignedPole != null) {
+            tag.putLong("AssignedPole", assignedPole.asLong());
+        }
         
         ListTag memberList = new ListTag();
         for (BlockPos pos : members) {
@@ -148,21 +155,16 @@ public class ElectricalNetwork {
 
     public static ElectricalNetwork load(CompoundTag tag) {
         ElectricalNetwork net = new ElectricalNetwork(tag.getInt("Id"));
-        // Direct set energy
         int energy = tag.getInt("Energy");
         net.energyBuffer.receiveEnergy(energy, false); 
+        if (tag.contains("AssignedPole")) {
+            net.assignedPole = BlockPos.of(tag.getLong("AssignedPole"));
+        }
         
         ListTag memberList = tag.getList("Members", 10);
         for (int i = 0; i < memberList.size(); i++) {
             NbtUtils.readBlockPos(memberList.getCompound(i), "P").ifPresent(net.members::add);
         }
         return net;
-    }
-    
-    // Custom loader for NbtUtils weirdness if needed, but standard is fine
-    public void loadMembers(ListTag list) {
-        for (int i=0; i<list.size(); i++) {
-            NbtUtils.readBlockPos(list.getCompound(i), "P").ifPresent(members::add);
-        }
     }
 }
