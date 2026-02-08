@@ -45,10 +45,13 @@ public class ElectricalPoleRenderer implements BlockEntityRenderer<ElectricalPol
             drawCatenary(consumer, pose, start, floorEnd, 0.07f, packedLight, packedOverlay, sprite);
         }
 
-        // 2. Render ALL connections
+        // 2. Render ALL connections (Machines and Poles)
         for (BlockPos target : be.getConnections()) {
             BlockState targetState = be.getLevel().getBlockState(target);
             
+            // SKIP FLOOR BLOCKS: They are rendered in Step 1 above.
+            if (targetState.is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get())) continue;
+
             // ROBUST POLE CHECK
             boolean isPoleAtTarget = targetState.getBlock() instanceof ElectricalPoleBlock;
             if (!isPoleAtTarget && targetState.isAir()) {
