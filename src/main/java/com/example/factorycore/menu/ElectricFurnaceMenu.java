@@ -26,15 +26,21 @@ public class ElectricFurnaceMenu extends ModularUIContainerMenu {
         if (be instanceof IContainerUIHolder holder) {
             return holder;
         }
-        // Fallback to prevent crash, returning an empty UI holder
+        // Fallback to prevent crash, returning a dummy UI holder with matching slot count
         return new IContainerUIHolder() {
             @Override
             public com.lowdragmc.lowdraglib2.gui.ui.ModularUI createUI(net.minecraft.world.entity.player.Player player) {
-                return com.lowdragmc.lowdraglib2.gui.ui.ModularUI.of(com.lowdragmc.lowdraglib2.gui.ui.UI.empty(), player);
+                com.lowdragmc.lowdraglib2.gui.ui.UI ui = com.lowdragmc.lowdraglib2.gui.ui.UI.empty();
+                // Add 2 dummy slots for the machine
+                ui.getRootElement().addChild(new com.lowdragmc.lowdraglib2.gui.ui.elements.ItemSlot().bind(new net.neoforged.neoforge.items.ItemStackHandler(2), 0));
+                ui.getRootElement().addChild(new com.lowdragmc.lowdraglib2.gui.ui.elements.ItemSlot().bind(new net.neoforged.neoforge.items.ItemStackHandler(2), 1));
+                // Add player inventory (36 slots)
+                ui.getRootElement().addChild(new com.lowdragmc.lowdraglib2.gui.ui.elements.inventory.InventorySlots());
+                return com.lowdragmc.lowdraglib2.gui.ui.ModularUI.of(ui, player);
             }
             @Override
             public boolean isStillValid(net.minecraft.world.entity.player.Player player) {
-                return false;
+                return false; // Close as soon as possible
             }
         };
     }
