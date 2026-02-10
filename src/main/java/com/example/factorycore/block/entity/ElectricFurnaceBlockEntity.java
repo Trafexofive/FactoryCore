@@ -49,7 +49,8 @@ public class ElectricFurnaceBlockEntity extends AbstractFactoryMultiblockBlockEn
             return e != null ? (float) e.getEnergyStored() / e.getMaxEnergyStored() : 0f;
         })).layout(l -> FactoryUI.apply(l, 10f, 17f, 10f, 54f)));
         
-        ui.getRootElement().addChild(new com.lowdragmc.lowdraglib2.gui.ui.elements.inventory.InventorySlots().layout(l -> FactoryUI.bottom(l, 5f, 8f)));
+        ui.getRootElement().addChild(new com.lowdragmc.lowdraglib2.gui.ui.elements.inventory.InventorySlots().layout(l -> FactoryUI.pos(l, 8f, 84f)));
+        
         return com.lowdragmc.lowdraglib2.gui.ui.ModularUI.of(ui, player);
     }
 

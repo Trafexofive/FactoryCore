@@ -44,11 +44,19 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
         if (!level.isClientSide && !state.is(oldState.getBlock())) {
             FactoryNetworkManager manager = FactoryNetworkManager.get(level);
             if (manager != null) {
-                manager.addNode(pos);
+                manager.addNode((net.minecraft.server.level.ServerLevel)level, pos);
                 manager.setDirty();
             }
         }
         super.onPlace(state, level, pos, oldState, isMoving);
+    }
+
+    @Override
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, net.minecraft.world.level.block.Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+        if (!level.isClientSide) {
+            FactoryNetworkManager.get(level).refreshNode((net.minecraft.server.level.ServerLevel)level, pos);
+        }
     }
 
     /**
@@ -59,7 +67,7 @@ public class ElectricalFloorBlock extends BaseEntityBlock {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide) {
-            FactoryNetworkManager.get(level).removeNode(pos);
+            FactoryNetworkManager.get(level).removeNode((net.minecraft.server.level.ServerLevel)level, pos);
             
             // Notify nearby poles to un-render cables (Fix Zombie Cables)
             BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();

@@ -3,6 +3,8 @@ package com.example.factorycore.event;
 import com.example.factorycore.FactoryCore;
 import com.example.factorycore.command.FactoryCommand;
 import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
+import com.example.factorycore.power.FactoryNetworkManager;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -21,6 +23,16 @@ public class ModEventSubscriber {
     public static void onBlockBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel().isClientSide()) return;
         triggerNearbyPoleRefresh(event.getLevel(), event.getPos());
+    }
+
+    @SubscribeEvent
+    public static void onNeighborChanged(net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent event) {
+        if (event.getLevel().isClientSide()) return;
+        var level = (ServerLevel)event.getLevel();
+        var manager = FactoryNetworkManager.get(level);
+        if (manager != null) {
+            manager.refreshNode(level, event.getPos());
+        }
     }
 
     private static void triggerNearbyPoleRefresh(net.minecraft.world.level.LevelAccessor level, net.minecraft.core.BlockPos pos) {

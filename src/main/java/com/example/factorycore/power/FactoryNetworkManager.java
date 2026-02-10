@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.neoforged.neoforge.capabilities.Capabilities;
 
 import java.util.*;
 import java.util.HashMap;
@@ -101,140 +102,151 @@ public class FactoryNetworkManager extends SavedData {
      * - Energy buffers are combined (up to capacity).
      * - Old IDs are invalidated and redirected to the new master ID.
      */
-    public void tick(Level level) {
+    public void tick(ServerLevel level) {
         for (ElectricalNetwork net : networks.values()) {
             net.tick(level);
         }
     }
 
-    public void addNode(BlockPos pos) {
-        addNode(pos, -1);
-    }
+    public void addNode(ServerLevel level, BlockPos pos) {
+        if (nodeToNetworkId.containsKey(pos)) return;
 
-    public void addNode(BlockPos pos, int forceId) {
-        if (nodeToNetworkId.containsKey(pos)) {
-            // Already exists, but if forced ID is different, we might need a merge or move
-            if (forceId != -1 && nodeToNetworkId.get(pos) != forceId) {
-                ElectricalNetwork master = getNetwork(forceId);
-                ElectricalNetwork victim = getNetwork(nodeToNetworkId.get(pos));
-                if (master != null && victim != null) mergeNetworks(master, victim);
-            }
-            return;
+        Set<Integer> adjacentNetworks = new HashSet<>();
+        
+        // 1. Direct adjacency (Networks)
+        for (Direction dir : Direction.values()) {
+            ElectricalNetwork neighborNet = getNetworkAt(pos.relative(dir));
+            if (neighborNet != null) adjacentNetworks.add(neighborNet.getId());
         }
 
-        // Check neighbors
-        ElectricalNetwork foundNet = forceId != -1 ? getNetwork(forceId) : null;
-
-        // Simple adjacency check
-        BlockPos[] neighbors = { pos.above(), pos.below(), pos.north(), pos.south(), pos.east(), pos.west() };
-
-        for (BlockPos n : neighbors) {
-            ElectricalNetwork neighborNet = getNetworkAt(n);
-            if (neighborNet != null) {
-                if (foundNet == null) {
-                    // First one found, join it
-                    foundNet = neighborNet;
-                    foundNet.addNode(pos);
-                    nodeToNetworkId.put(pos, foundNet.getId());
-                } else if (foundNet.getId() != neighborNet.getId()) {
-                    // Critical: Two different networks touched. Merge required.
-                    mergeNetworks(foundNet, neighborNet);
-                    // Master might have changed after merge
-                    foundNet = getNetworkAt(pos);
-                }
+        // 2. Long-Range Pole Connection (Networks)
+        if (level.getBlockState(pos).getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock) {
+            for (BlockPos otherPole : findPolesInRange(level, pos, 6)) {
+                ElectricalNetwork otherNet = getNetworkAt(otherPole);
+                if (otherNet != null) adjacentNetworks.add(otherNet.getId());
             }
         }
 
-        if (foundNet == null) {
-            if (forceId != -1 && getNetwork(forceId) != null) {
-                foundNet = getNetwork(forceId);
-                foundNet.addNode(pos);
-                nodeToNetworkId.put(pos, foundNet.getId());
-            } else {
-                // Isolated block -> Create new network root
-                ElectricalNetwork newNet = new ElectricalNetwork(nextId++);
-                networks.put(newNet.getId(), newNet);
-                newNet.addNode(pos);
-                nodeToNetworkId.put(pos, newNet.getId());
+        ElectricalNetwork master = null;
+        if (adjacentNetworks.isEmpty()) {
+            master = new ElectricalNetwork(nextId++);
+            networks.put(master.getId(), master);
+        } else {
+            Iterator<Integer> it = adjacentNetworks.iterator();
+            master = getNetwork(it.next());
+            while (it.hasNext()) {
+                mergeNetworks(level, master, getNetwork(it.next()));
             }
         }
 
+        master.addNode(level, pos);
+        nodeToNetworkId.put(pos, master.getId());
+        
+        // 3. Visual Sync (Unified Scan)
+        syncVisuals(level, pos, findAllVisualLinks(level, pos));
+        
         setDirty();
     }
 
-    public void removeNode(BlockPos pos) {
+    private List<BlockPos> findAllVisualLinks(ServerLevel level, BlockPos pos) {
+        List<BlockPos> visualLinks = new ArrayList<>();
+        
+        // 1. Direct neighbors (Floor & Machines)
+        for (Direction dir : Direction.values()) {
+            BlockPos neighbor = pos.relative(dir);
+            if (dir == Direction.DOWN && level.getBlockState(neighbor).is(com.example.factorycore.registry.CoreBlocks.ELECTRICAL_FLOOR.get())) {
+                visualLinks.add(neighbor);
+            }
+            var cap = level.getCapability(Capabilities.EnergyStorage.BLOCK, neighbor, dir.getOpposite());
+            if (cap != null && !(level.getBlockState(neighbor).getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock)) {
+                visualLinks.add(neighbor);
+            }
+        }
+
+        // 2. Long-Range Poles
+        if (level.getBlockState(pos).getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock) {
+            visualLinks.addAll(findPolesInRange(level, pos, 6));
+        }
+        
+        return visualLinks;
+    }
+
+    private List<BlockPos> findPolesInRange(ServerLevel level, BlockPos pos, int range) {
+        List<BlockPos> found = new ArrayList<>();
+        for (BlockPos p : BlockPos.betweenClosed(pos.offset(-range, -2, -range), pos.offset(range, 2, range))) {
+            if (p.equals(pos)) continue;
+            if (level.getBlockState(p).getBlock() instanceof com.example.factorycore.block.ElectricalPoleBlock) {
+                found.add(p.immutable());
+            }
+        }
+        return found;
+    }
+
+    private void syncVisuals(ServerLevel level, BlockPos pos, List<BlockPos> links) {
+        var be = level.getBlockEntity(pos);
+        if (be instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity pole) {
+            pole.getConnections().clear();
+            for (BlockPos target : links) {
+                pole.addVisualConnection(target);
+                var targetBe = level.getBlockEntity(target);
+                if (targetBe instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity targetPole) {
+                    targetPole.addVisualConnection(pos);
+                    targetBe.setChanged();
+                    level.sendBlockUpdated(target, targetBe.getBlockState(), targetBe.getBlockState(), 3);
+                }
+            }
+            pole.setChanged();
+            level.sendBlockUpdated(pos, be.getBlockState(), be.getBlockState(), 3);
+        }
+    }
+
+    public void removeNode(ServerLevel level, BlockPos pos) {
         ElectricalNetwork net = getNetworkAt(pos);
         if (net != null) {
-            net.removeNode(pos);
-            nodeToNetworkId.remove(pos);
-
-            // FACTORIO QOL: Network Partitioning
-            // If we remove a node, the network might be split into two or more parts.
-            // We must perform a flood-fill from each neighbor to check connectivity.
-            Set<BlockPos> members = new HashSet<>(net.getMembers());
-            if (!members.isEmpty()) {
-                // 1. Clear current network assignments for all members
-                for (BlockPos p : members) nodeToNetworkId.remove(p);
-                networks.remove(net.getId());
-
-                // 2. Re-discover networks from remaining members
-                for (BlockPos p : members) {
-                    if (!nodeToNetworkId.containsKey(p)) {
-                        // Found a part that hasn't been re-assigned yet
-                        int newId = nextId++;
-                        ElectricalNetwork newNet = new ElectricalNetwork(newId);
-                        networks.put(newId, newNet);
-                        
-                        // Flood-fill to find all connected members
-                        floodFillAssign(p, members, newNet);
+            // Clean up visual links from neighbors first
+            var be = level.getBlockEntity(pos);
+            if (be instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity pole) {
+                for (BlockPos target : new HashSet<>(pole.getConnections())) {
+                    var targetBe = level.getBlockEntity(target);
+                    if (targetBe instanceof com.example.factorycore.block.entity.ElectricalPoleBlockEntity targetPole) {
+                        targetPole.removeConnection(pos);
+                        targetBe.setChanged();
+                        level.sendBlockUpdated(target, targetBe.getBlockState(), targetBe.getBlockState(), 3);
                     }
                 }
             }
 
+            net.removeNode(pos);
+            nodeToNetworkId.remove(pos);
+
+            Set<BlockPos> members = new HashSet<>(net.getMembers());
+            if (!members.isEmpty()) {
+                for (BlockPos p : members) nodeToNetworkId.remove(p);
+                networks.remove(net.getId());
+
+                for (BlockPos p : members) {
+                    if (!nodeToNetworkId.containsKey(p)) {
+                        addNode(level, p);
+                    }
+                }
+            }
             setDirty();
         }
     }
 
-    private void floodFillAssign(BlockPos start, Set<BlockPos> pool, ElectricalNetwork network) {
-        Queue<BlockPos> queue = new ArrayDeque<>();
-        queue.add(start);
-        
-        while (!queue.isEmpty()) {
-            BlockPos current = queue.poll();
-            if (nodeToNetworkId.containsKey(current)) continue;
-
-            nodeToNetworkId.put(current, network.getId());
-            network.addNode(current);
-
-            // Check 6 neighbors
-            for (Direction dir : Direction.values()) {
-                BlockPos n = current.relative(dir);
-                if (pool.contains(n) && !nodeToNetworkId.containsKey(n)) {
-                    queue.add(n);
-                }
-            }
-        }
-    }
-
-    /**
-     * Merges 'victim' network into 'master' network.
-     * Logic:
-     * 1. Transfer all member blocks from victim to master.
-     * 2. Transfer stored energy.
-     * 3. Update lookup table so victim's blocks point to master ID.
-     * 4. Delete victim network.
-     */
-    public void mergeNetworks(ElectricalNetwork master, ElectricalNetwork victim) {
-        if (master == victim)
-            return;
-
-        // Move all members from victim to master
-        for (BlockPos pos : victim.getMembers()) {
-            nodeToNetworkId.put(pos, master.getId()); // Update lookup
-        }
-
-        master.merge(victim);
+    public void mergeNetworks(ServerLevel level, ElectricalNetwork master, ElectricalNetwork victim) {
+        if (master == victim || victim == null) return;
+        for (BlockPos pos : victim.getMembers()) nodeToNetworkId.put(pos, master.getId());
+        master.merge(level, victim);
         networks.remove(victim.getId());
         setDirty();
+    }
+
+    public void refreshNode(ServerLevel level, BlockPos pos) {
+        ElectricalNetwork net = getNetworkAt(pos);
+        if (net != null) {
+            net.refreshNode(level, pos);
+            syncVisuals(level, pos, findAllVisualLinks(level, pos));
+        }
     }
 }

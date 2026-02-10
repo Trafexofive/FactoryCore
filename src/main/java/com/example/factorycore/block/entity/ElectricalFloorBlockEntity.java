@@ -5,6 +5,7 @@ import com.example.factorycore.power.FactoryNetworkManager;
 import com.example.factorycore.registry.CoreBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -16,6 +17,14 @@ public class ElectricalFloorBlockEntity extends BlockEntity {
 
     public ElectricalFloorBlockEntity(BlockPos pos, BlockState blockState) {
         super(CoreBlockEntities.ELECTRICAL_FLOOR.get(), pos, blockState);
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && !level.isClientSide) {
+            FactoryNetworkManager.get(level).addNode((ServerLevel)level, worldPosition);
+        }
     }
 
     @Nullable

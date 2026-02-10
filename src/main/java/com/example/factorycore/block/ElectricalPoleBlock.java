@@ -4,6 +4,7 @@ import com.example.factorycore.block.entity.ElectricalPoleBlockEntity;
 import com.example.factorycore.power.FactoryNetworkManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -74,7 +75,7 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
         if (!level.isClientSide && state.getValue(PART) == PolePart.BOTTOM && !state.is(oldState.getBlock())) {
-            FactoryNetworkManager.get(level).addNode(pos);
+            FactoryNetworkManager.get(level).addNode((ServerLevel)level, pos);
         }
         super.onPlace(state, level, pos, oldState, isMoving);
     }
@@ -119,7 +120,7 @@ public class ElectricalPoleBlock extends BaseEntityBlock {
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && state.getValue(PART) == PolePart.BOTTOM) {
             FactoryNetworkManager manager = FactoryNetworkManager.get(level);
-            if (manager != null) manager.removeNode(pos);
+            if (manager != null) manager.removeNode((ServerLevel)level, pos);
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ElectricalPoleBlockEntity pole) pole.disconnectAll();
         }

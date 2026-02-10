@@ -30,16 +30,16 @@ public class FactoryPlayerHandler {
             player.getPersistentData().putBoolean(tag, true);
             
             // Give 64 of everything (FactoryCore only)
-            player.getInventory().add(new ItemStack(CoreItems.MACHINE_CASING.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.ELECTRICAL_FLOOR.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.ELECTRICAL_POLE.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.CREATIVE_ENERGY_SOURCE.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.ELECTRIC_FURNACE_CONTROLLER.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.AUTO_ASSEMBLER_CONTROLLER.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.BATTERY.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.SOLAR_PANEL.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.PIPE.get(), 64));
-            player.getInventory().add(new ItemStack(CoreItems.WRENCH.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.MACHINE_CASING.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.ELECTRICAL_FLOOR.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.ELECTRICAL_POLE.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.CREATIVE_ENERGY_SOURCE.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.ELECTRIC_FURNACE_CONTROLLER.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.AUTO_ASSEMBLER_CONTROLLER.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.BATTERY.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.SOLAR_PANEL.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.PIPE.get(), 64));
+            // player.getInventory().add(new ItemStack(CoreItems.WRENCH.get(), 64));
             
             // Starter Blueprints
             player.getInventory().add(createBlueprint("Electric Furnace", createFurnacePattern()));

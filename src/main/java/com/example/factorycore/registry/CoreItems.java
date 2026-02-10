@@ -3,9 +3,12 @@ package com.example.factorycore.registry;
 import com.example.factorycore.FactoryCore;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
+
+// This class registers all items for the FactoryCore mod, including block items and custom items like the wrench.
 
 public class CoreItems {
         public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(FactoryCore.MODID);

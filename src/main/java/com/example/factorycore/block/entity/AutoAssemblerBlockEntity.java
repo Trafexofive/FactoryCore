@@ -6,7 +6,10 @@ import com.example.factorycore.util.MultiblockPatterns;
 import com.example.factorycore.ui.FactoryUI;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEntity implements net.minecraft.world.MenuProvider {
@@ -52,36 +55,55 @@ public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEnti
     @Override
     public com.lowdragmc.lowdraglib2.gui.ui.ModularUI createUI(net.minecraft.world.entity.player.Player player) {
         try {
-            net.minecraft.resources.ResourceLocation loc = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("factorycore", "gui/auto_assembler.xml");
-            System.out.println("AutoAssembler: Loading XML from " + loc);
+            com.lowdragmc.lowdraglib2.gui.ui.UITemplate template = com.lowdragmc.lowdraglib2.editor.resource.UIResource.INSTANCE.getResourceInstance()
+                    .getResource(new com.lowdragmc.lowdraglib2.editor.resource.FilePath(ResourceLocation.fromNamespaceAndPath("ldlib2", "resources/global/assembler.ui.nbt")));
             
-            org.w3c.dom.Document doc = com.lowdragmc.lowdraglib2.utils.XmlUtils.loadXml(loc);
-            if (doc == null) {
-                System.out.println("AutoAssembler: Document is NULL");
-                return com.lowdragmc.lowdraglib2.gui.ui.ModularUI.of(com.lowdragmc.lowdraglib2.gui.ui.UI.empty(), player);
-            }
+            com.lowdragmc.lowdraglib2.gui.ui.UI ui = template != null ? template.createUI() : com.lowdragmc.lowdraglib2.gui.ui.UI.empty();
 
-            com.lowdragmc.lowdraglib2.gui.ui.UI ui = com.lowdragmc.lowdraglib2.gui.ui.UI.of(doc);
-            if (ui == null) {
-                System.out.println("AutoAssembler: UI is NULL");
-                return com.lowdragmc.lowdraglib2.gui.ui.ModularUI.of(com.lowdragmc.lowdraglib2.gui.ui.UI.empty(), player);
-            }
+            // Wrapped Handler for UI Logic (Respects Lock)
+            IItemHandlerModifiable uiHandler = new IItemHandlerModifiable() {
+                @Override public void setStackInSlot(int slot, ItemStack stack) {
+                    if (isLocked) return;
+                    inventory.setStackInSlot(slot, stack);
+                }
+                @Override public int getSlots() { return inventory.getSlots(); }
+                @Override public ItemStack getStackInSlot(int slot) { return inventory.getStackInSlot(slot); }
+                @Override public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+                    if (isLocked) return stack;
+                    return inventory.insertItem(slot, stack, simulate);
+                }
+                @Override public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                    if (isLocked) return ItemStack.EMPTY;
+                    return inventory.extractItem(slot, amount, simulate);
+                }
+                @Override public int getSlotLimit(int slot) { return inventory.getSlotLimit(slot); }
+                @Override public boolean isItemValid(int slot, ItemStack stack) {
+                    return !isLocked && inventory.isItemValid(slot, stack);
+                }
+            };
 
-            System.out.println("AutoAssembler: UI Loaded. Root: " + ui.getRootElement().getClass().getSimpleName());
-
-            // Bind Slots
-            for (int i = 0; i <= 10; i++) {
+            // Bind Input Slots (0-8) using Locked Handler
+            for (int i = 0; i < 9; i++) {
                 final int index = i;
-                ui.select("slot_" + i, com.lowdragmc.lowdraglib2.gui.ui.elements.ItemSlot.class)
-                  .forEach(slot -> slot.bind(inventory, index));
+                ui.select("in_" + i, com.lowdragmc.lowdraglib2.gui.ui.elements.ItemSlot.class)
+                  .forEach(slot -> slot.bind(uiHandler, index));
             }
+            
+            // Bind Output Slot (9) - Always extractable? Assuming standard logic, outputs are usually accessible even if inputs are locked.
+            // But if 'isLocked' means "Entire Machine Locked", then use uiHandler.
+            // If it means "Recipe Locked", then inputs are read-only, outputs are accessible.
+            // Let's assume strict lock for now.
+            ui.select("out_0", com.lowdragmc.lowdraglib2.gui.ui.elements.ItemSlot.class)
+              .forEach(slot -> slot.bind(uiHandler, 9));
 
             // Bind Buttons
             ui.select("lock_btn", com.lowdragmc.lowdraglib2.gui.ui.elements.Button.class).forEach(btn -> {
                 btn.setOnClick(click -> {
                     this.isLocked = !this.isLocked;
+                    btn.setText(isLocked ? "Locked" : "Lock");
                     setChanged();
                 });
+                btn.setText(isLocked ? "Locked" : "Lock");
             });
 
             ui.select("toggle_btn", com.lowdragmc.lowdraglib2.gui.ui.elements.Button.class).forEach(btn -> {
@@ -91,11 +113,6 @@ public class AutoAssemblerBlockEntity extends AbstractFactoryMultiblockBlockEnti
                     setChanged();
                 });
                 btn.setText(isActive ? "Stop" : "Start");
-            });
-
-            // Bind Dynamic Labels
-            ui.select("lock_status", com.lowdragmc.lowdraglib2.gui.ui.elements.Label.class).forEach(label -> {
-                label.bindDataSource(FactoryUI.supplier(() -> Component.literal(isLocked ? "Locked" : "Unlocked")));
             });
 
             // Bind Energy
